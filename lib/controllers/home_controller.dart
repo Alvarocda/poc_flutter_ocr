@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:alvaro/widgets/custom_painter.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_ml_kit/google_ml_kit.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
 ///
@@ -17,12 +18,17 @@ class HomeController {
   HomeController();
 
   late List<CameraDescription> _cameras;
+  // late CameraController _cameraControllerForRecgonizing;
   late CameraController cameraController;
 
   final ValueNotifier<bool> isCameraLoaded = ValueNotifier<bool>(false);
   final ValueNotifier<String> platesDetected = ValueNotifier<String>('');
-  final StreamController<Rect> platesRect = StreamController<Rect>();
+  final ValueNotifier<String> textDetected = ValueNotifier<String>('');
+  final ValueNotifier<Widget> platesWidget = ValueNotifier<Container>(Container());
+  final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
   bool _isProcessing = false;
+  final TextRecognizer _textRecognizer = TextRecognizer();
+  final RegExp regexPlaca = RegExp(r'^[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}$', caseSensitive: false);
 
   ///
   ///
@@ -32,8 +38,16 @@ class HomeController {
     _cameras = await availableCameras();
     cameraController = CameraController(
       _cameras.first,
-      ResolutionPreset.max,
+      ResolutionPreset.high,
+      enableAudio: false,
     );
+    // _cameraControllerForRecgonizing = CameraController(
+    //   _cameras.first,
+    //   ResolutionPreset.high,
+    //   enableAudio: false,
+    // );
+    // await _cameraControllerForRecgonizing.initialize();
+
     await cameraController.initialize();
     isCameraLoaded.value = true;
   }
@@ -41,41 +55,50 @@ class HomeController {
   ///
   ///
   ///
-  void startMonitoring() {
-    cameraController.startImageStream(
-      (CameraImage image) async {
-        if (!_isProcessing) {
-          InputImage inputImage = _getStreamInputImage(image);
-          await _detectText(inputImage);
-        }
-      },
-    );
+  Future<void> startMonitoring() async {
+    if (isStreaming.value) {
+      await cameraController.stopImageStream();
+      await _textRecognizer.close();
+      _isProcessing = false;
+      isStreaming.value = false;
+    } else {
+      await cameraController.startImageStream(
+        (CameraImage image) async {
+          isStreaming.value = true;
+          if (!_isProcessing) {
+            InputImage? inputImage = _getStreamInputImage(image);
+            if (inputImage != null) {
+              platesDetected.value = await _detectText(inputImage) ?? '';
+            }
+          }
+        },
+      );
+    }
   }
 
   ///
   ///
   ///
-  InputImage _getStreamInputImage(CameraImage image) {
-    // final Uint8List bytes = allBytes.done().buffer.asUint8List();
+  InputImage? _getStreamInputImage(CameraImage image) {
     final Uint8List bytes = Uint8List.fromList(
       image.planes.fold(
         <int>[],
-        (List<int> previousValue, Plane element) =>
-            previousValue..addAll(element.bytes),
+        (List<int> previousValue, Plane element) => previousValue..addAll(element.bytes),
       ),
     );
 
-    final Size imageSize =
-        Size(image.width.toDouble(), image.height.toDouble());
+    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
 
-    final InputImageRotation imageRotation =
-        InputImageRotationValue.fromRawValue(
-                cameraController.description.sensorOrientation) ??
-            InputImageRotation.rotation0deg;
+    final CameraDescription camera = _cameras.first;
+    final InputImageRotation? imageRotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation);
+    if (imageRotation == null) {
+      return null;
+    }
 
-    final InputImageFormat inputImageFormat =
-        InputImageFormatValue.fromRawValue(image.format.raw) ??
-            InputImageFormat.nv21;
+    final InputImageFormat? inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (inputImageFormat == null) {
+      return null;
+    }
 
     final List<InputImagePlaneMetadata> planeData = image.planes.map(
       (Plane plane) {
@@ -91,7 +114,7 @@ class HomeController {
       size: imageSize,
       imageRotation: imageRotation,
       inputImageFormat: inputImageFormat,
-      planeData: planeData,
+      planeData: null,
     );
 
     return InputImage.fromBytes(bytes: bytes, inputImageData: inputImageData);
@@ -100,43 +123,59 @@ class HomeController {
   ///
   ///
   ///
-  Future<void> getImage(ImageSource imageSource) async {
+  Future<void> getGalleryImage() async {
     ImagePicker imagePicker = ImagePicker();
-    XFile? xFile = await imagePicker.pickImage(source: imageSource);
+    XFile? xFile = await imagePicker.pickImage(source: ImageSource.gallery);
     if (xFile != null) {
       InputImage inputImage = InputImage.fromFilePath(xFile.path);
-      await _detectText(inputImage);
+      platesDetected.value = await _detectText(inputImage) ?? '';
     }
   }
 
   ///
   ///
   ///
-  Future<void> _detectText(InputImage inputImage) async {
+  Future<String?> _detectText(InputImage inputImage) async {
     _isProcessing = true;
-    TextRecognizer textDetector = GoogleMlKit.vision.textRecognizer();
-    RecognizedText recognizedText = await textDetector.processImage(inputImage);
-    await textDetector.close();
-    RegExp regexPlaca = RegExp(
-      r'^[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}$',
-      caseSensitive: false,
-    );
+    RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
+
+    textDetected.value = recognizedText.text;
+    print(recognizedText.text);
     StringBuffer plates = StringBuffer();
-    print('TEXTO RECONHECIDO: ${recognizedText.text}');
+    // print('TEXTO RECONHECIDO: ${recognizedText.text}');
     for (TextBlock block in recognizedText.blocks) {
       for (TextLine line in block.lines) {
-        if (regexPlaca.hasMatch(line.text
-            .replaceAll('-', '')
-            .replaceAll(':', '')
-            .replaceAll(' ', ''))) {
-          plates.writeln(line.text);
-          platesRect.add(line.boundingBox);
+        String detectedPlate =
+            line.text.trim().replaceAll('-', '').replaceAll(':', '').replaceAll(' ', '').replaceAll('|', '1');
+        print('Detected Plate: $detectedPlate');
+        if (regexPlaca.hasMatch(detectedPlate)) {
+          plates.writeln(detectedPlate);
         }
       }
     }
+    // await Future<void>.delayed(const Duration(milliseconds: 200));
     if (plates.isNotEmpty) {
-      platesDetected.value = plates.toString();
+      _isProcessing = false;
+      return plates.toString();
     }
+    plates.clear();
     _isProcessing = false;
+    return null;
+  }
+
+  ///
+  ///
+  ///
+  Widget buildResults(TextLine line) {
+    CustomPainter painter;
+    final Size imageSize = Size(
+      cameraController.value.previewSize!.height - 100,
+      cameraController.value.previewSize!.width,
+    );
+    painter = TextDetectorPainter(imageSize, line);
+
+    return CustomPaint(
+      painter: painter,
+    );
   }
 }

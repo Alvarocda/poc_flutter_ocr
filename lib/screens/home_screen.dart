@@ -48,22 +48,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (value) {
                   return CameraPreview(
                     _controller.cameraController,
-                    child: StreamBuilder<Rect>(
-                      builder:
-                          (BuildContext context, AsyncSnapshot<Rect> snapshot) {
-                        return Stack(
-                          children: <Widget>[
-                            Positioned.fromRect(
-                              rect: snapshot.data ?? Rect.zero,
-                              child: Container(
-                                height: 10,
-                                width: 10,
-                                color: Colors.red,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+                    child: ValueListenableBuilder<Widget>(
+                      valueListenable: _controller.platesWidget,
+                      builder: (BuildContext context, Widget value, Widget? child) => value,
                     ),
                   );
                 }
@@ -77,12 +64,21 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _controller.isStreaming,
+            builder: (BuildContext context, bool isStreaming, Widget? child) {
+              return ElevatedButton(
+                onPressed: _controller.startMonitoring,
+                child: Text(isStreaming ? 'Parar' : 'Ativar'),
+              );
+            },
+          ),
           ElevatedButton(
-            onPressed: _controller.startMonitoring,
-            child: const Text('Ativar'),
+            onPressed: _controller.getGalleryImage,
+            child: const Text('Galeria'),
           ),
           SizedBox(
-            height: 100,
+            height: 120,
             child: ValueListenableBuilder<String>(
               valueListenable: _controller.platesDetected,
               builder: (BuildContext context, String value, Widget? child) {
@@ -90,6 +86,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: <Widget>[
                     const Text('Placas detectadas:'),
                     Text(value),
+                    const Text('Texto detectado:'),
+                    ValueListenableBuilder<String>(
+                      valueListenable: _controller.textDetected,
+                      builder: (BuildContext context, String value, Widget? child) {
+                        return Text(value);
+                      },
+                    )
                   ],
                 );
               },
