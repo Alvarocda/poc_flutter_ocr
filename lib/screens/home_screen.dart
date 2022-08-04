@@ -1,8 +1,7 @@
-import 'package:alvaro/models/placa.dart';
+import 'package:alvaro/controllers/home_controller.dart';
+import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_ml_kit/google_ml_kit.dart';
-import 'package:image_picker/image_picker.dart';
 
 ///
 ///
@@ -24,8 +23,13 @@ class HomeScreen extends StatefulWidget {
 ///
 ///
 class _HomeScreenState extends State<HomeScreen> {
-  List<Placa> placasReconhecidas = <Placa>[];
-  String _recognizedText = '';
+  final HomeController _controller = HomeController();
+
+  @override
+  void initState() {
+    _controller.initCamera();
+    super.initState();
+  }
 
   ///
   ///
@@ -35,56 +39,64 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              ElevatedButton(onPressed: () => getImage(ImageSource.camera), child: const Text('Camera')),
-              const SizedBox(width: 15),
-              ElevatedButton(onPressed: () => getImage(ImageSource.gallery), child: const Text('Galeria')),
-            ],
+          Expanded(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _controller.isCameraLoaded,
+              builder: (BuildContext context, bool value, Widget? child) {
+                if (value) {
+                  return CameraPreview(
+                    _controller.cameraController,
+                    child: StreamBuilder<Rect>(
+                      builder:
+                          (BuildContext context, AsyncSnapshot<Rect> snapshot) {
+                        return Stack(
+                          children: <Widget>[
+                            Positioned.fromRect(
+                              rect: snapshot.data ?? Rect.zero,
+                              child: Container(
+                                height: 10,
+                                width: 10,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  );
+                }
+                return const Center(
+                  child: SizedBox(
+                    width: 25,
+                    height: 25,
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              },
+            ),
           ),
-          const Text('Placas encontradas:'),
-          Text(_recognizedText.isEmpty ? 'Nenhum texto reconhecido' : _recognizedText),
+          ElevatedButton(
+            onPressed: _controller.startMonitoring,
+            child: const Text('Ativar'),
+          ),
+          SizedBox(
+            height: 100,
+            child: ValueListenableBuilder<String>(
+              valueListenable: _controller.platesDetected,
+              builder: (BuildContext context, String value, Widget? child) {
+                return Column(
+                  children: <Widget>[
+                    const Text('Placas detectadas:'),
+                    Text(value),
+                  ],
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
-  }
-
-  ///
-  ///
-  ///
-  Future<void> getImage(ImageSource imageSource) async {
-    ImagePicker imagePicker = ImagePicker();
-    XFile? xFile = await imagePicker.pickImage(source: imageSource);
-    if (xFile != null) {
-      await readTextsInImage(xFile);
-    }
-  }
-
-  ///
-  ///
-  ///
-  Future<void> readTextsInImage(XFile xFile) async {
-    InputImage inputImage = InputImage.fromFilePath(xFile.path);
-    TextRecognizer textDetector = GoogleMlKit.vision.textRecognizer();
-    RecognizedText recognizedText = await textDetector.processImage(inputImage);
-    await textDetector.close();
-    _recognizedText = '';
-    RegExp regexPlaca = RegExp(
-      r'^[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}$',
-      caseSensitive: false,
-    );
-
-    for (TextBlock block in recognizedText.blocks) {
-      for (TextLine line in block.lines) {
-        if (regexPlaca.hasMatch(line.text.replaceAll('-', '').replaceAll(':', '').replaceAll(' ', ''))) {
-          _recognizedText += '${line.text}\n';
-        }
-      }
-    }
-    if (_recognizedText.isNotEmpty) {
-      setState(() {});
-    }
   }
 }
