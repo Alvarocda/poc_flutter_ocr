@@ -18,7 +18,6 @@ class HomeController {
   HomeController();
 
   late List<CameraDescription> _cameras;
-  // late CameraController _cameraControllerForRecgonizing;
   late CameraController cameraController;
 
   final ValueNotifier<bool> isCameraLoaded = ValueNotifier<bool>(false);
@@ -38,15 +37,9 @@ class HomeController {
     _cameras = await availableCameras();
     cameraController = CameraController(
       _cameras.first,
-      ResolutionPreset.high,
+      ResolutionPreset.low,
       enableAudio: false,
     );
-    // _cameraControllerForRecgonizing = CameraController(
-    //   _cameras.first,
-    //   ResolutionPreset.high,
-    //   enableAudio: false,
-    // );
-    // await _cameraControllerForRecgonizing.initialize();
 
     await cameraController.initialize();
     isCameraLoaded.value = true;
@@ -114,7 +107,7 @@ class HomeController {
       size: imageSize,
       imageRotation: imageRotation,
       inputImageFormat: inputImageFormat,
-      planeData: null,
+      planeData: planeData,
     );
 
     return InputImage.fromBytes(bytes: bytes, inputImageData: inputImageData);
@@ -153,7 +146,6 @@ class HomeController {
         }
       }
     }
-    // await Future<void>.delayed(const Duration(milliseconds: 200));
     if (plates.isNotEmpty) {
       _isProcessing = false;
       return plates.toString();
