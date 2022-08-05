@@ -24,12 +24,12 @@ class HomeController {
   final ValueNotifier<String> platesDetected = ValueNotifier<String>('');
   final ValueNotifier<String> textDetected = ValueNotifier<String>('');
   final StreamController<List<CustomPaint>?> platesWidget =
-      StreamController<List<CustomPaint>?>();
+  StreamController<List<CustomPaint>?>();
   final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
   bool _isProcessing = false;
-  final TextRecognizer _textRecognizer = TextRecognizer();
+  TextRecognizer? _textRecognizer = TextRecognizer();
   final RegExp regexPlaca =
-      RegExp(r'^[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}$', caseSensitive: false);
+  RegExp(r'^[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}$', caseSensitive: false);
 
   ///
   ///
@@ -40,6 +40,7 @@ class HomeController {
     cameraController = CameraController(
       _cameras.first,
       ResolutionPreset.low,
+      imageFormatGroup: ImageFormatGroup.yuv420,
       enableAudio: false,
     );
 
@@ -53,13 +54,14 @@ class HomeController {
   Future<void> startMonitoring() async {
     if (isStreaming.value) {
       await cameraController.stopImageStream();
-      await _textRecognizer.close();
+      await _textRecognizer!.close();
+      _textRecognizer = null;
       platesWidget.add(null);
       _isProcessing = false;
       isStreaming.value = false;
     } else {
       await cameraController.startImageStream(
-        (CameraImage image) async {
+            (CameraImage image) async {
           isStreaming.value = true;
           if (!_isProcessing) {
             InputImage? inputImage = _getStreamInputImage(image);
@@ -79,29 +81,29 @@ class HomeController {
     final Uint8List bytes = Uint8List.fromList(
       image.planes.fold(
         <int>[],
-        (List<int> previousValue, Plane element) =>
-            previousValue..addAll(element.bytes),
+            (List<int> previousValue, Plane element) =>
+        previousValue..addAll(element.bytes),
       ),
     );
 
     final Size imageSize =
-        Size(image.width.toDouble(), image.height.toDouble());
+    Size(image.width.toDouble(), image.height.toDouble());
 
     final CameraDescription camera = _cameras.first;
     final InputImageRotation? imageRotation =
-        InputImageRotationValue.fromRawValue(camera.sensorOrientation);
+    InputImageRotationValue.fromRawValue(camera.sensorOrientation);
     if (imageRotation == null) {
       return null;
     }
 
     final InputImageFormat? inputImageFormat =
-        InputImageFormatValue.fromRawValue(image.format.raw);
+    InputImageFormatValue.fromRawValue(image.format.raw);
     if (inputImageFormat == null) {
       return null;
     }
 
     final List<InputImagePlaneMetadata> planeData = image.planes.map(
-      (Plane plane) {
+          (Plane plane) {
         return InputImagePlaneMetadata(
           bytesPerRow: plane.bytesPerRow,
           height: plane.height,
@@ -137,8 +139,9 @@ class HomeController {
   ///
   Future<String?> _detectText(InputImage inputImage) async {
     _isProcessing = true;
+    _textRecognizer ??= TextRecognizer();
     RecognizedText recognizedText =
-        await _textRecognizer.processImage(inputImage);
+    await _textRecognizer!.processImage(inputImage);
 
     textDetected.value = recognizedText.text;
     print(recognizedText.text);
