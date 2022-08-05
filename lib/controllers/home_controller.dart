@@ -23,13 +23,11 @@ class HomeController {
   final ValueNotifier<bool> isCameraLoaded = ValueNotifier<bool>(false);
   final ValueNotifier<String> platesDetected = ValueNotifier<String>('');
   final ValueNotifier<String> textDetected = ValueNotifier<String>('');
-  final StreamController<List<CustomPaint>?> platesWidget =
-  StreamController<List<CustomPaint>?>();
+  final StreamController<List<CustomPaint>?> platesWidget = StreamController<List<CustomPaint>?>();
   final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
   bool _isProcessing = false;
   TextRecognizer? _textRecognizer = TextRecognizer();
-  final RegExp regexPlaca =
-  RegExp(r'^[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}$', caseSensitive: false);
+  final RegExp regexPlaca = RegExp('[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}', caseSensitive: false);
 
   ///
   ///
@@ -61,7 +59,7 @@ class HomeController {
       isStreaming.value = false;
     } else {
       await cameraController.startImageStream(
-            (CameraImage image) async {
+        (CameraImage image) async {
           isStreaming.value = true;
           if (!_isProcessing) {
             InputImage? inputImage = _getStreamInputImage(image);
@@ -81,29 +79,25 @@ class HomeController {
     final Uint8List bytes = Uint8List.fromList(
       image.planes.fold(
         <int>[],
-            (List<int> previousValue, Plane element) =>
-        previousValue..addAll(element.bytes),
+        (List<int> previousValue, Plane element) => previousValue..addAll(element.bytes),
       ),
     );
 
-    final Size imageSize =
-    Size(image.width.toDouble(), image.height.toDouble());
+    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
 
     final CameraDescription camera = _cameras.first;
-    final InputImageRotation? imageRotation =
-    InputImageRotationValue.fromRawValue(camera.sensorOrientation);
+    final InputImageRotation? imageRotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation);
     if (imageRotation == null) {
       return null;
     }
 
-    final InputImageFormat? inputImageFormat =
-    InputImageFormatValue.fromRawValue(image.format.raw);
+    final InputImageFormat? inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw);
     if (inputImageFormat == null) {
       return null;
     }
 
     final List<InputImagePlaneMetadata> planeData = image.planes.map(
-          (Plane plane) {
+      (Plane plane) {
         return InputImagePlaneMetadata(
           bytesPerRow: plane.bytesPerRow,
           height: plane.height,
@@ -140,44 +134,66 @@ class HomeController {
   Future<String?> _detectText(InputImage inputImage) async {
     _isProcessing = true;
     _textRecognizer ??= TextRecognizer();
-    RecognizedText recognizedText =
-    await _textRecognizer!.processImage(inputImage);
+    RecognizedText recognizedText = await _textRecognizer!.processImage(inputImage);
 
     textDetected.value = recognizedText.text;
-    print(recognizedText.text);
     StringBuffer plates = StringBuffer();
     List<CustomPaint> customPaints = <CustomPaint>[];
     // print('TEXTO RECONHECIDO: ${recognizedText.text}');
-    for (TextBlock block in recognizedText.blocks) {
-      for (TextLine line in block.lines) {
-        String detectedPlate = line.text
-            .trim()
-            .replaceAll('-', '')
-            .replaceAll(':', '')
-            .replaceAll(' ', '')
-            .replaceAll('|', '1');
-        print('Detected Plate: $detectedPlate');
-        if (regexPlaca.hasMatch(detectedPlate)) {
-          plates.writeln(detectedPlate);
-          CustomPaint customPaint = CustomPaint(
-            painter: CustomTextRecognizerPainter(
-              line,
-              inputImage.inputImageData!.size,
-              inputImage.inputImageData!.imageRotation,
-            ),
-          );
-          customPaints.add(customPaint);
+    if (regexPlaca.hasMatch(
+      recognizedText.text.trim().replaceAll(' ', '').replaceAll('-', '').replaceAll('.', ''),
+    )) {
+      int elementIndex = 0;
+      for (TextBlock block in recognizedText.blocks) {
+        for (TextLine line in block.lines) {
+          elementIndex = 0;
+          for (TextElement element in line.elements) {
+            print('Text Element: ${element.text}');
+            String detectedPlate = element.text.trim().replaceAll(' ', '').replaceAll('-', '').replaceAll('.', '');
+            if (detectedPlate.length == 7) {
+              _highlightDetectedPlate(detectedPlate, plates, element.boundingBox, inputImage, customPaints);
+            } else if (RegExp(r'^[0-9]{4}$').hasMatch(detectedPlate)) {
+              TextElement lastTextElement = line.elements[elementIndex - 1];
+              String detectedPlate = '${lastTextElement.text}${element.text}';
+              detectedPlate = detectedPlate.trim().replaceAll(' ', '').replaceAll('-', '').replaceAll('.', '');
+              if (detectedPlate.length == 7) {
+                Rect rect = Rect.fromLTRB(
+                  lastTextElement.boundingBox.left,
+                  element.boundingBox.top,
+                  element.boundingBox.right,
+                  element.boundingBox.bottom,
+                );
+                _highlightDetectedPlate(detectedPlate, plates, rect, inputImage, customPaints);
+              }
+            }
+            elementIndex++;
+          }
         }
       }
-    }
-    if (plates.isNotEmpty) {
-      _isProcessing = false;
-      platesWidget.add(customPaints);
-      return plates.toString();
+      if (plates.isNotEmpty) {
+        _isProcessing = false;
+        platesWidget.add(customPaints);
+        return plates.toString();
+      }
     }
     platesWidget.add(null);
     plates.clear();
     _isProcessing = false;
     return null;
+  }
+
+  void _highlightDetectedPlate(
+      String detectedPlate, StringBuffer plates, Rect rect, InputImage inputImage, List<CustomPaint> customPaints) {
+    if (regexPlaca.hasMatch(detectedPlate)) {
+      plates.writeln(detectedPlate);
+      CustomPaint customPaint = CustomPaint(
+        painter: CustomTextRecognizerPainter(
+          rect,
+          inputImage.inputImageData!.size,
+          inputImage.inputImageData!.imageRotation,
+        ),
+      );
+      customPaints.add(customPaint);
+    }
   }
 }

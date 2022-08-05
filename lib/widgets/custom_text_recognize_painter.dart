@@ -12,10 +12,9 @@ class CustomTextRecognizerPainter extends CustomPainter {
   ///
   ///
   ///
-  CustomTextRecognizerPainter(
-      this.recognizedLine, this.absoluteImageSize, this.rotation);
+  CustomTextRecognizerPainter(this.rect, this.absoluteImageSize, this.rotation);
 
-  final TextLine recognizedLine;
+  final Rect rect;
   final Size absoluteImageSize;
   final InputImageRotation rotation;
 
@@ -29,24 +28,16 @@ class CustomTextRecognizerPainter extends CustomPainter {
     final Paint background = Paint()..color = const Color(0x99000000);
 
     final ParagraphBuilder builder = ParagraphBuilder(
-      ParagraphStyle(
-          textAlign: TextAlign.left,
-          fontSize: 16,
-          textDirection: TextDirection.ltr),
+      ParagraphStyle(textAlign: TextAlign.left, fontSize: 16, textDirection: TextDirection.ltr),
     );
-    builder.pushStyle(
-        ui.TextStyle(color: Colors.lightGreenAccent, background: background));
+    builder.pushStyle(ui.TextStyle(color: Colors.lightGreenAccent, background: background));
     // builder.addText(recognizedLine.text);
     builder.pop();
 
-    final double left = translateX(
-        recognizedLine.boundingBox.left, rotation, size, absoluteImageSize);
-    final double top = translateY(
-        recognizedLine.boundingBox.top, rotation, size, absoluteImageSize);
-    final double right = translateX(
-        recognizedLine.boundingBox.right, rotation, size, absoluteImageSize);
-    final double bottom = translateY(
-        recognizedLine.boundingBox.bottom, rotation, size, absoluteImageSize);
+    final double left = translateX(rect.left, rotation, size, absoluteImageSize);
+    final double top = translateY(rect.top, rotation, size, absoluteImageSize);
+    final double right = translateX(rect.right, rotation, size, absoluteImageSize);
+    final double bottom = translateY(rect.bottom, rotation, size, absoluteImageSize);
 
     canvas.drawRect(
       Rect.fromLTRB(left, top, right, bottom),
@@ -64,6 +55,6 @@ class CustomTextRecognizerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(CustomTextRecognizerPainter oldDelegate) {
-    return oldDelegate.recognizedLine != recognizedLine;
+    return oldDelegate.rect != rect;
   }
 }
