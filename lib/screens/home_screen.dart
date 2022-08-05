@@ -1,5 +1,4 @@
 import 'package:alvaro/controllers/home_controller.dart';
-import 'package:alvaro/widgets/custom_text_recognize_painter.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -49,13 +48,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (value) {
                   return CameraPreview(
                     _controller.cameraController,
-                    child: ValueListenableBuilder<CustomPaint?>(
-                      valueListenable: _controller.platesWidget,
-                      builder: (BuildContext context, CustomPaint? value, Widget? child) {
-                        if(value == null){
+                    child: StreamBuilder<List<CustomPaint>?>(
+                      stream: _controller.platesWidget.stream,
+                      builder: (
+                        BuildContext context,
+                        AsyncSnapshot<List<CustomPaint>?> snapshot,
+                      ) {
+                        if (snapshot.data == null) {
                           return Container();
                         }
-                        return value;
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: snapshot.data!,
+                        );
                       },
                     ),
                   );
@@ -95,7 +100,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Text('Texto detectado:'),
                     ValueListenableBuilder<String>(
                       valueListenable: _controller.textDetected,
-                      builder: (BuildContext context, String value, Widget? child) {
+                      builder:
+                          (BuildContext context, String value, Widget? child) {
                         return Text(value);
                       },
                     )

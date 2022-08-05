@@ -23,8 +23,8 @@ class HomeController {
   final ValueNotifier<bool> isCameraLoaded = ValueNotifier<bool>(false);
   final ValueNotifier<String> platesDetected = ValueNotifier<String>('');
   final ValueNotifier<String> textDetected = ValueNotifier<String>('');
-  final ValueNotifier<CustomPaint?> platesWidget =
-      ValueNotifier<CustomPaint?>(null);
+  final StreamController<List<CustomPaint>?> platesWidget =
+      StreamController<List<CustomPaint>?>();
   final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
   bool _isProcessing = false;
   final TextRecognizer _textRecognizer = TextRecognizer();
@@ -54,6 +54,7 @@ class HomeController {
     if (isStreaming.value) {
       await cameraController.stopImageStream();
       await _textRecognizer.close();
+      platesWidget.add(null);
       _isProcessing = false;
       isStreaming.value = false;
     } else {
@@ -142,6 +143,7 @@ class HomeController {
     textDetected.value = recognizedText.text;
     print(recognizedText.text);
     StringBuffer plates = StringBuffer();
+    List<CustomPaint> customPaints = <CustomPaint>[];
     // print('TEXTO RECONHECIDO: ${recognizedText.text}');
     for (TextBlock block in recognizedText.blocks) {
       for (TextLine line in block.lines) {
@@ -161,15 +163,16 @@ class HomeController {
               inputImage.inputImageData!.imageRotation,
             ),
           );
-          platesWidget.value = customPaint;
+          customPaints.add(customPaint);
         }
       }
     }
     if (plates.isNotEmpty) {
       _isProcessing = false;
+      platesWidget.add(customPaints);
       return plates.toString();
     }
-    platesWidget.value = null;
+    platesWidget.add(null);
     plates.clear();
     _isProcessing = false;
     return null;
