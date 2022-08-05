@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:alvaro/widgets/custom_painter.dart';
+import 'package:alvaro/widgets/custom_text_recognize_painter.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -23,11 +23,13 @@ class HomeController {
   final ValueNotifier<bool> isCameraLoaded = ValueNotifier<bool>(false);
   final ValueNotifier<String> platesDetected = ValueNotifier<String>('');
   final ValueNotifier<String> textDetected = ValueNotifier<String>('');
-  final ValueNotifier<Widget> platesWidget = ValueNotifier<Container>(Container());
+  final ValueNotifier<CustomPaint?> platesWidget =
+      ValueNotifier<CustomPaint?>(null);
   final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
   bool _isProcessing = false;
   final TextRecognizer _textRecognizer = TextRecognizer();
-  final RegExp regexPlaca = RegExp(r'^[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}$', caseSensitive: false);
+  final RegExp regexPlaca =
+      RegExp(r'^[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}$', caseSensitive: false);
 
   ///
   ///
@@ -76,19 +78,23 @@ class HomeController {
     final Uint8List bytes = Uint8List.fromList(
       image.planes.fold(
         <int>[],
-        (List<int> previousValue, Plane element) => previousValue..addAll(element.bytes),
+        (List<int> previousValue, Plane element) =>
+            previousValue..addAll(element.bytes),
       ),
     );
 
-    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
+    final Size imageSize =
+        Size(image.width.toDouble(), image.height.toDouble());
 
     final CameraDescription camera = _cameras.first;
-    final InputImageRotation? imageRotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation);
+    final InputImageRotation? imageRotation =
+        InputImageRotationValue.fromRawValue(camera.sensorOrientation);
     if (imageRotation == null) {
       return null;
     }
 
-    final InputImageFormat? inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw);
+    final InputImageFormat? inputImageFormat =
+        InputImageFormatValue.fromRawValue(image.format.raw);
     if (inputImageFormat == null) {
       return null;
     }
@@ -130,7 +136,8 @@ class HomeController {
   ///
   Future<String?> _detectText(InputImage inputImage) async {
     _isProcessing = true;
-    RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
+    RecognizedText recognizedText =
+        await _textRecognizer.processImage(inputImage);
 
     textDetected.value = recognizedText.text;
     print(recognizedText.text);
@@ -138,11 +145,23 @@ class HomeController {
     // print('TEXTO RECONHECIDO: ${recognizedText.text}');
     for (TextBlock block in recognizedText.blocks) {
       for (TextLine line in block.lines) {
-        String detectedPlate =
-            line.text.trim().replaceAll('-', '').replaceAll(':', '').replaceAll(' ', '').replaceAll('|', '1');
+        String detectedPlate = line.text
+            .trim()
+            .replaceAll('-', '')
+            .replaceAll(':', '')
+            .replaceAll(' ', '')
+            .replaceAll('|', '1');
         print('Detected Plate: $detectedPlate');
         if (regexPlaca.hasMatch(detectedPlate)) {
           plates.writeln(detectedPlate);
+          CustomPaint customPaint = CustomPaint(
+            painter: CustomTextRecognizerPainter(
+              line,
+              inputImage.inputImageData!.size,
+              inputImage.inputImageData!.imageRotation,
+            ),
+          );
+          platesWidget.value = customPaint;
         }
       }
     }
@@ -150,24 +169,9 @@ class HomeController {
       _isProcessing = false;
       return plates.toString();
     }
+    platesWidget.value = null;
     plates.clear();
     _isProcessing = false;
     return null;
-  }
-
-  ///
-  ///
-  ///
-  Widget buildResults(TextLine line) {
-    CustomPainter painter;
-    final Size imageSize = Size(
-      cameraController.value.previewSize!.height - 100,
-      cameraController.value.previewSize!.width,
-    );
-    painter = TextDetectorPainter(imageSize, line);
-
-    return CustomPaint(
-      painter: painter,
-    );
   }
 }

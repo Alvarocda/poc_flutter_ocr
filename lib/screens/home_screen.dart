@@ -1,4 +1,5 @@
 import 'package:alvaro/controllers/home_controller.dart';
+import 'package:alvaro/widgets/custom_text_recognize_painter.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -48,9 +49,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (value) {
                   return CameraPreview(
                     _controller.cameraController,
-                    child: ValueListenableBuilder<Widget>(
+                    child: ValueListenableBuilder<CustomPaint?>(
                       valueListenable: _controller.platesWidget,
-                      builder: (BuildContext context, Widget value, Widget? child) => value,
+                      builder: (BuildContext context, CustomPaint? value, Widget? child) {
+                        if(value == null){
+                          return Container();
+                        }
+                        return value;
+                      },
                     ),
                   );
                 }
