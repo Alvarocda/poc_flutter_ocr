@@ -1,6 +1,6 @@
 import 'package:alvaro/controllers/home_controller.dart';
+import 'package:alvaro/widgets/custom_drawer_plate.dart';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 ///
@@ -37,7 +37,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(
+        title: const Text('Detector de placas'),
+      ),
+      endDrawer: CustomDrawerPlate(
+        platesStreamController: _controller.onDetectPlate,
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -49,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   return CameraPreview(
                     _controller.cameraController,
                     child: StreamBuilder<List<CustomPaint>?>(
-                      stream: _controller.platesWidget.stream,
+                      stream: _controller.highlightedCustomPaints.stream,
                       builder: (
                         BuildContext context,
                         AsyncSnapshot<List<CustomPaint>?> snapshot,
@@ -75,39 +80,26 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: _controller.isStreaming,
-            builder: (BuildContext context, bool isStreaming, Widget? child) {
-              return ElevatedButton(
-                onPressed: _controller.startMonitoring,
-                child: Text(isStreaming ? 'Parar' : 'Ativar'),
-              );
-            },
-          ),
-          ElevatedButton(
-            onPressed: _controller.getGalleryImage,
-            child: const Text('Galeria'),
-          ),
-          SizedBox(
-            height: 120,
-            child: ValueListenableBuilder<String>(
-              valueListenable: _controller.platesDetected,
-              builder: (BuildContext context, String value, Widget? child) {
-                return Column(
-                  children: <Widget>[
-                    const Text('Placas detectadas:'),
-                    Text(value),
-                    const Text('Texto detectado:'),
-                    ValueListenableBuilder<String>(
-                      valueListenable: _controller.textDetected,
-                      builder:
-                          (BuildContext context, String value, Widget? child) {
-                        return Text(value);
-                      },
-                    )
-                  ],
-                );
-              },
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                ValueListenableBuilder<bool>(
+                  valueListenable: _controller.isStreaming,
+                  builder:
+                      (BuildContext context, bool isStreaming, Widget? child) {
+                    return ElevatedButton(
+                      onPressed: _controller.startMonitoring,
+                      child: Text(isStreaming ? 'Parar' : 'Ativar'),
+                    );
+                  },
+                ),
+                ElevatedButton(
+                  onPressed: _controller.getGalleryImage,
+                  child: const Text('Galeria'),
+                ),
+              ],
             ),
           ),
         ],

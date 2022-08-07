@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:alvaro/models/plate.dart';
 import 'package:alvaro/widgets/custom_text_recognize_painter.dart';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
@@ -25,14 +25,20 @@ class HomeController {
   final ValueNotifier<bool> isCameraLoaded = ValueNotifier<bool>(false);
   final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
 
-  final ValueNotifier<String> platesDetected = ValueNotifier<String>('');
-  final ValueNotifier<String> textDetected = ValueNotifier<String>('');
-  final StreamController<List<CustomPaint>?> platesWidget =
+  final StreamController<List<CustomPaint>?> highlightedCustomPaints =
       StreamController<List<CustomPaint>?>();
   bool _isProcessing = false;
   TextRecognizer? _textRecognizer = TextRecognizer();
   final RegExp plateRegex =
       RegExp('[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}', caseSensitive: false);
+  final List<Plate> _detectedPlates = <Plate>[];
+  final StreamController<List<Plate>> _onDetectPlate =
+      StreamController<List<Plate>>.broadcast();
+
+  ///
+  ///
+  ///
+  Stream<List<Plate>> get onDetectPlate => _onDetectPlate.stream;
 
   ///
   ///
@@ -65,7 +71,7 @@ class HomeController {
       await _recognitionCameraController.stopImageStream();
       await _textRecognizer!.close();
       _textRecognizer = null;
-      platesWidget.add(null);
+      highlightedCustomPaints.add(null);
       _isProcessing = false;
       isStreaming.value = false;
     } else {
@@ -75,7 +81,7 @@ class HomeController {
           if (!_isProcessing) {
             InputImage? inputImage = _getStreamInputImage(image);
             if (inputImage != null) {
-              platesDetected.value = await _processImage(inputImage) ?? '';
+              await _processImage(inputImage);
             }
           }
         },
@@ -139,21 +145,19 @@ class HomeController {
     XFile? xFile = await imagePicker.pickImage(source: ImageSource.gallery);
     if (xFile != null) {
       InputImage inputImage = InputImage.fromFilePath(xFile.path);
-      platesDetected.value = await _processImage(inputImage) ?? '';
+      await _processImage(inputImage);
     }
   }
 
   ///
   ///
   ///
-  Future<String?> _processImage(InputImage inputImage) async {
+  Future<void> _processImage(InputImage inputImage) async {
     _isProcessing = true;
     _textRecognizer ??= TextRecognizer();
     RecognizedText recognizedText =
         await _textRecognizer!.processImage(inputImage);
-    textDetected.value = recognizedText.text;
-    StringBuffer? plates;
-    List<CustomPaint>? customPaints;
+    List<CustomPaint>? highlights;
 
     ///If somewhere in all the detected text it finds a plate, the algorithm will display the plates found on the screen.
     if (plateRegex.hasMatch(_normalizePlate(recognizedText.text))) {
@@ -163,6 +167,8 @@ class HomeController {
           elementIndex = 0;
           for (TextElement element in line.elements) {
             String detectedPlate = _normalizePlate(element.text);
+            // dev.debugger(when: detectedPlate == 'XAS');
+            // dev.debugger(when: detectedPlate == '4550');
 
             /// If the text is not exactly 7 characters long, it will try to concatenate the text of the previous
             /// element with the current element and check if the junction of the two forms a valid plate.
@@ -170,10 +176,13 @@ class HomeController {
             /// detects a space in the middle of the plate.
             if (detectedPlate.length == 7) {
               if (_isValidPlate(detectedPlate)) {
-                plates ??= StringBuffer();
-                customPaints ??= <CustomPaint>[];
-                _highlightDetectedPlate(detectedPlate, plates,
-                    element.boundingBox, inputImage, customPaints);
+                highlights ??= <CustomPaint>[];
+                _highlightDetectedPlate(
+                  detectedPlate,
+                  element.boundingBox,
+                  inputImage,
+                  highlights,
+                );
               }
 
               /// If the text in the current element has less than 7 letters, it will check if the text size is 4 characters
@@ -181,7 +190,7 @@ class HomeController {
               /// previous element is composed of 3 letters, if both conditions are true, the algorithm will understand
               /// that it can be a plate and will assemble a String with the junction of the two.
             } else if (detectedPlate.length == 4 &&
-                RegExp(r'^[0-9]{4}$').hasMatch(detectedPlate)) {
+                RegExp(r'^[0-9][a-zA-Z0-9][0-9]{2}$').hasMatch(detectedPlate)) {
               if (elementIndex == 0) {
                 return null;
               }
@@ -198,31 +207,50 @@ class HomeController {
                       element.boundingBox.right,
                       element.boundingBox.bottom,
                     );
-                    plates ??= StringBuffer();
-                    customPaints ??= <CustomPaint>[];
+                    highlights ??= <CustomPaint>[];
                     _highlightDetectedPlate(
-                        detectedPlate, plates, rect, inputImage, customPaints);
+                      detectedPlate,
+                      rect,
+                      inputImage,
+                      highlights,
+                    );
                   }
                 }
               }
+            } else {
+              print('Discarded plate: ${element.text}');
             }
             elementIndex++;
           }
         }
       }
-      if (plates != null && plates.isNotEmpty) {
-        _isProcessing = false;
-        platesWidget.add(customPaints);
-        return plates.toString();
-      }
     }
-    platesWidget.add(null);
-    plates?.clear();
+
     _isProcessing = false;
+    _onDetectPlate.add(_detectedPlates);
+    if (highlights != null) {
+      highlightedCustomPaints.add(highlights);
+      return;
+    }
+    highlightedCustomPaints.add(null);
     return null;
   }
 
-  /// Prepares the text to be
+  ///
+  ///
+  ///
+  void _addPlateToList(
+      String detectedPlate, InputImage image, Rect highlightedArea) {
+    if (!_detectedPlates.any((Plate plate) => plate.plate == detectedPlate)) {
+      _detectedPlates.add(Plate(
+        plate: detectedPlate,
+        imageBytes: image.bytes!,
+        highlightedArea: highlightedArea,
+      ));
+    }
+  }
+
+  ///
   ///
   ///
   String _normalizePlate(String plate) {
@@ -245,19 +273,37 @@ class HomeController {
   ///
   void _highlightDetectedPlate(
     String detectedPlate,
-    StringBuffer plates,
     Rect rect,
     InputImage inputImage,
     List<CustomPaint> customPaints,
   ) {
-    plates.writeln(detectedPlate);
+    _addPlateToList(detectedPlate, inputImage, rect);
+    Rect betterRect = Rect.fromLTRB(
+      rect.left - 15,
+      rect.top,
+      rect.right,
+      rect.bottom,
+    );
     CustomPaint customPaint = CustomPaint(
       painter: CustomTextRecognizerPainter(
-        rect,
+        betterRect,
         inputImage.inputImageData!.size,
         inputImage.inputImageData!.imageRotation,
       ),
     );
     customPaints.add(customPaint);
   }
+
+  ///
+  ///
+  ///
+// void dispose() {
+//   _onDetectPlate.close();
+//   _textRecognizer?.close();
+//   _recognitionCameraController.dispose();
+//   cameraController.dispose();
+//   highlightedCustomPaints.close();
+//   isCameraLoaded.dispose();
+//   isStreaming.dispose();
+// }
 }
