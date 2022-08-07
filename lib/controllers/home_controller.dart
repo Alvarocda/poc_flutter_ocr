@@ -18,16 +18,21 @@ class HomeController {
   HomeController();
 
   late List<CameraDescription> _cameras;
+
   late CameraController cameraController;
+  late CameraController _recognitionCameraController;
 
   final ValueNotifier<bool> isCameraLoaded = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
+
   final ValueNotifier<String> platesDetected = ValueNotifier<String>('');
   final ValueNotifier<String> textDetected = ValueNotifier<String>('');
-  final StreamController<List<CustomPaint>?> platesWidget = StreamController<List<CustomPaint>?>();
-  final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
+  final StreamController<List<CustomPaint>?> platesWidget =
+      StreamController<List<CustomPaint>?>();
   bool _isProcessing = false;
   TextRecognizer? _textRecognizer = TextRecognizer();
-  final RegExp plateRegex = RegExp('[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}', caseSensitive: false);
+  final RegExp plateRegex =
+      RegExp('[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}', caseSensitive: false);
 
   ///
   ///
@@ -42,6 +47,12 @@ class HomeController {
       enableAudio: false,
     );
 
+    _recognitionCameraController = CameraController(
+      _cameras.first,
+      ResolutionPreset.high,
+      enableAudio: false,
+    );
+    await _recognitionCameraController.initialize();
     await cameraController.initialize();
     isCameraLoaded.value = true;
   }
@@ -51,14 +62,14 @@ class HomeController {
   ///
   Future<void> startMonitoring() async {
     if (isStreaming.value) {
-      await cameraController.stopImageStream();
+      await _recognitionCameraController.stopImageStream();
       await _textRecognizer!.close();
       _textRecognizer = null;
       platesWidget.add(null);
       _isProcessing = false;
       isStreaming.value = false;
     } else {
-      await cameraController.startImageStream(
+      await _recognitionCameraController.startImageStream(
         (CameraImage image) async {
           isStreaming.value = true;
           if (!_isProcessing) {
@@ -79,19 +90,23 @@ class HomeController {
     final Uint8List bytes = Uint8List.fromList(
       image.planes.fold(
         <int>[],
-        (List<int> previousValue, Plane element) => previousValue..addAll(element.bytes),
+        (List<int> previousValue, Plane element) =>
+            previousValue..addAll(element.bytes),
       ),
     );
 
-    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
+    final Size imageSize =
+        Size(image.width.toDouble(), image.height.toDouble());
 
     final CameraDescription camera = _cameras.first;
-    final InputImageRotation? imageRotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation);
+    final InputImageRotation? imageRotation =
+        InputImageRotationValue.fromRawValue(camera.sensorOrientation);
     if (imageRotation == null) {
       return null;
     }
 
-    final InputImageFormat? inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw);
+    final InputImageFormat? inputImageFormat =
+        InputImageFormatValue.fromRawValue(image.format.raw);
     if (inputImageFormat == null) {
       return null;
     }
@@ -134,7 +149,8 @@ class HomeController {
   Future<String?> _processImage(InputImage inputImage) async {
     _isProcessing = true;
     _textRecognizer ??= TextRecognizer();
-    RecognizedText recognizedText = await _textRecognizer!.processImage(inputImage);
+    RecognizedText recognizedText =
+        await _textRecognizer!.processImage(inputImage);
     textDetected.value = recognizedText.text;
     StringBuffer? plates;
     List<CustomPaint>? customPaints;
@@ -154,16 +170,21 @@ class HomeController {
             /// detects a space in the middle of the plate.
             if (detectedPlate.length == 7) {
               if (_isValidPlate(detectedPlate)) {
-                plates ?? StringBuffer();
+                plates ??= StringBuffer();
                 customPaints ??= <CustomPaint>[];
-                _highlightDetectedPlate(detectedPlate, plates!, element.boundingBox, inputImage, customPaints);
+                _highlightDetectedPlate(detectedPlate, plates,
+                    element.boundingBox, inputImage, customPaints);
               }
 
               /// If the text in the current element has less than 7 letters, it will check if the text size is 4 characters
               /// and if it is composed of 4 numbers, if it is composed of 4 numbers, it will check if the text in the
               /// previous element is composed of 3 letters, if both conditions are true, the algorithm will understand
               /// that it can be a plate and will assemble a String with the junction of the two.
-            } else if (detectedPlate.length == 4 && RegExp(r'^[0-9]{4}$').hasMatch(detectedPlate)) {
+            } else if (detectedPlate.length == 4 &&
+                RegExp(r'^[0-9]{4}$').hasMatch(detectedPlate)) {
+              if (elementIndex == 0) {
+                return null;
+              }
               TextElement lastTextElement = line.elements[elementIndex - 1];
               if (RegExp('[a-zA-Z]{3}').hasMatch(lastTextElement.text)) {
                 String detectedPlate = '${lastTextElement.text}${element.text}';
@@ -177,9 +198,10 @@ class HomeController {
                       element.boundingBox.right,
                       element.boundingBox.bottom,
                     );
-                    plates ?? StringBuffer();
+                    plates ??= StringBuffer();
                     customPaints ??= <CustomPaint>[];
-                    _highlightDetectedPlate(detectedPlate, plates!, rect, inputImage, customPaints);
+                    _highlightDetectedPlate(
+                        detectedPlate, plates, rect, inputImage, customPaints);
                   }
                 }
               }
@@ -204,7 +226,11 @@ class HomeController {
   ///
   ///
   String _normalizePlate(String plate) {
-    return plate.trim().replaceAll(' ', '').replaceAll('-', '').replaceAll('.', '');
+    return plate
+        .trim()
+        .replaceAll(' ', '')
+        .replaceAll('-', '')
+        .replaceAll('.', '');
   }
 
   ///
