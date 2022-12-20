@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:alvaro/models/detection.dart';
 import 'package:alvaro/models/plate.dart';
 import 'package:alvaro/widgets/custom_text_recognize_painter.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_vision/flutter_vision.dart';
+import 'package:flutter_vision/src/utils/response_handler.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 ///
@@ -20,20 +24,20 @@ class HomeController {
   late List<CameraDescription> _cameras;
 
   late CameraController cameraController;
-  late CameraController _recognitionCameraController;
+
+  // late CameraController _recognitionCameraController;
 
   final ValueNotifier<bool> isCameraLoaded = ValueNotifier<bool>(false);
   final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
 
-  final StreamController<List<CustomPaint>?> highlightedCustomPaints =
-      StreamController<List<CustomPaint>?>();
+  final StreamController<List<CustomPaint>?> highlightedCustomPaints = StreamController<List<CustomPaint>?>();
   bool _isProcessing = false;
-  TextRecognizer? _textRecognizer = TextRecognizer();
-  final RegExp plateRegex =
-      RegExp('[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}', caseSensitive: false);
+
+  // TextRecognizer? _textRecognizer = TextRecognizer();
+  final RegExp plateRegex = RegExp('[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}', caseSensitive: false);
   final List<Plate> _detectedPlates = <Plate>[];
-  final StreamController<List<Plate>> _onDetectPlate =
-      StreamController<List<Plate>>.broadcast();
+  final StreamController<List<Plate>> _onDetectPlate = StreamController<List<Plate>>.broadcast();
+  late final FlutterVision _vision;
 
   ///
   ///
@@ -48,18 +52,13 @@ class HomeController {
     _cameras = await availableCameras();
     cameraController = CameraController(
       _cameras.first,
-      ResolutionPreset.low,
+      ResolutionPreset.medium,
       imageFormatGroup: ImageFormatGroup.yuv420,
       enableAudio: false,
     );
-
-    _recognitionCameraController = CameraController(
-      _cameras.first,
-      ResolutionPreset.high,
-      enableAudio: false,
-    );
-    await _recognitionCameraController.initialize();
     await cameraController.initialize();
+    _vision = FlutterVision();
+    await _vision.loadYoloModel(modelPath: 'assets/best.tflite', labels: 'assets/labels.txt');
     isCameraLoaded.value = true;
   }
 
@@ -68,24 +67,13 @@ class HomeController {
   ///
   Future<void> startMonitoring() async {
     if (isStreaming.value) {
-      await _recognitionCameraController.stopImageStream();
-      await _textRecognizer!.close();
-      _textRecognizer = null;
+      await cameraController.stopImageStream();
       highlightedCustomPaints.add(null);
       _isProcessing = false;
       isStreaming.value = false;
     } else {
-      await _recognitionCameraController.startImageStream(
-        (CameraImage image) async {
-          isStreaming.value = true;
-          if (!_isProcessing) {
-            InputImage? inputImage = _getStreamInputImage(image);
-            if (inputImage != null) {
-              await _processImage(inputImage);
-            }
-          }
-        },
-      );
+      isStreaming.value = true;
+      await cameraController.startImageStream(_processImage);
     }
   }
 
@@ -96,23 +84,19 @@ class HomeController {
     final Uint8List bytes = Uint8List.fromList(
       image.planes.fold(
         <int>[],
-        (List<int> previousValue, Plane element) =>
-            previousValue..addAll(element.bytes),
+        (List<int> previousValue, Plane element) => previousValue..addAll(element.bytes),
       ),
     );
 
-    final Size imageSize =
-        Size(image.width.toDouble(), image.height.toDouble());
+    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
 
     final CameraDescription camera = _cameras.first;
-    final InputImageRotation? imageRotation =
-        InputImageRotationValue.fromRawValue(camera.sensorOrientation);
+    final InputImageRotation? imageRotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation);
     if (imageRotation == null) {
       return null;
     }
 
-    final InputImageFormat? inputImageFormat =
-        InputImageFormatValue.fromRawValue(image.format.raw);
+    final InputImageFormat? inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw);
     if (inputImageFormat == null) {
       return null;
     }
@@ -144,107 +128,101 @@ class HomeController {
     ImagePicker imagePicker = ImagePicker();
     XFile? xFile = await imagePicker.pickImage(source: ImageSource.gallery);
     if (xFile != null) {
-      InputImage inputImage = InputImage.fromFilePath(xFile.path);
-      await _processImage(inputImage);
+      // InputImage inputImage = InputImage.fromFilePath(xFile.path);
+
+      img.Image? decodedImage = img.decodeImage(await xFile.readAsBytes());
+
+      await _processStaticImage(
+          decodedImage!.getBytes(format: img.Format.rgb), decodedImage.height, decodedImage.width);
+      // await _processImage(inputImage);
     }
   }
 
   ///
   ///
   ///
-  Future<void> _processImage(InputImage inputImage) async {
+  Future<void> _processStaticImage(Uint8List bytes, int height, int width) async {
     _isProcessing = true;
-    _textRecognizer ??= TextRecognizer();
-    RecognizedText recognizedText =
-        await _textRecognizer!.processImage(inputImage);
-    List<CustomPaint>? highlights;
+    List<CustomPaint> highlights = <CustomPaint>[];
+    ResponseHandler responseHandler = await _vision.yoloOnImage(
+      bytesList: bytes,
+      imageHeight: height,
+      imageWidth: width,
+      confThreshold: 0.5,
+      iouThreshold: 0.5,
+    );
 
-    ///If somewhere in all the detected text it finds a plate, the algorithm will display the plates found on the screen.
-    if (plateRegex.hasMatch(_normalizePlate(recognizedText.text))) {
-      int elementIndex = 0;
-      for (TextBlock block in recognizedText.blocks) {
-        for (TextLine line in block.lines) {
-          elementIndex = 0;
-          for (TextElement element in line.elements) {
-            String detectedPlate = _normalizePlate(element.text);
-            // dev.debugger(when: detectedPlate == 'XAS');
-            // dev.debugger(when: detectedPlate == '4550');
+    if (responseHandler.type == 'success') {
+      for (Map<String, dynamic> detectedObject in responseHandler.data) {
+        Detection detection = Detection.fromMap(detectedObject);
 
-            /// If the text is not exactly 7 characters long, it will try to concatenate the text of the previous
-            /// element with the current element and check if the junction of the two forms a valid plate.
-            /// As the algorithm is working with TextElements, it ends up splitting into different elements when it
-            /// detects a space in the middle of the plate.
-            if (detectedPlate.length == 7) {
-              if (_isValidPlate(detectedPlate)) {
-                highlights ??= <CustomPaint>[];
-                _highlightDetectedPlate(
-                  detectedPlate,
-                  element.boundingBox,
-                  inputImage,
-                  highlights,
-                );
-              }
+        // Rect rect = Rect.fromPoints(Offset(detection.x1, detection.y1), Offset(detection.x2, detection.y2));
 
-              /// If the text in the current element has less than 7 letters, it will check if the text size is 4 characters
-              /// and if it is composed of 4 numbers, if it is composed of 4 numbers, it will check if the text in the
-              /// previous element is composed of 3 letters, if both conditions are true, the algorithm will understand
-              /// that it can be a plate and will assemble a String with the junction of the two.
-            } else if (detectedPlate.length == 4 &&
-                RegExp(r'^[0-9][a-zA-Z0-9][0-9]{2}$').hasMatch(detectedPlate)) {
-              if (elementIndex == 0) {
-                return null;
-              }
-              TextElement lastTextElement = line.elements[elementIndex - 1];
-              if (RegExp('[a-zA-Z]{3}').hasMatch(lastTextElement.text)) {
-                String detectedPlate = '${lastTextElement.text}${element.text}';
-                detectedPlate = _normalizePlate(detectedPlate);
-
-                if (detectedPlate.length == 7) {
-                  if (_isValidPlate(detectedPlate)) {
-                    Rect rect = Rect.fromLTRB(
-                      lastTextElement.boundingBox.left,
-                      element.boundingBox.top,
-                      element.boundingBox.right,
-                      element.boundingBox.bottom,
-                    );
-                    highlights ??= <CustomPaint>[];
-                    _highlightDetectedPlate(
-                      detectedPlate,
-                      rect,
-                      inputImage,
-                      highlights,
-                    );
-                  }
-                }
-              }
-            } else {
-              print('Discarded plate: ${element.text}');
-            }
-            elementIndex++;
-          }
-        }
+        // _highlightDetectedPlate('detectedPlate', rect, cameraImage, detection.image, highlights, detection);
       }
     }
 
-    _isProcessing = false;
     _onDetectPlate.add(_detectedPlates);
-    if (highlights != null) {
+    if (highlights.isNotEmpty) {
       highlightedCustomPaints.add(highlights);
+      // await Future<void>.delayed(const Duration(seconds: 1));
+      _isProcessing = false;
       return;
     }
     highlightedCustomPaints.add(null);
+    // await Future<void>.delayed(const Duration(seconds: 1));
+    _isProcessing = false;
     return null;
   }
 
   ///
   ///
   ///
-  void _addPlateToList(
-      String detectedPlate, InputImage image, Rect highlightedArea) {
+  Future<void> _processImage(CameraImage cameraImage) async {
+    if (_isProcessing) {
+      return;
+    }
+    _isProcessing = true;
+    List<CustomPaint> highlights = <CustomPaint>[];
+    ResponseHandler responseHandler = await _vision.yoloOnFrame(
+      bytesList: cameraImage.planes.map((Plane plane) => plane.bytes).toList(),
+      imageHeight: cameraImage.height,
+      imageWidth: cameraImage.width,
+      confThreshold: 0.5,
+      iouThreshold: 0.5,
+    );
+
+    if (responseHandler.type == 'success') {
+      for (Map<String, dynamic> detectedObject in responseHandler.data) {
+        Detection detection = Detection.fromMap(detectedObject);
+
+        Rect rect = Rect.fromPoints(Offset(detection.x1, detection.y1), Offset(detection.x2, detection.y2));
+
+        _highlightDetectedPlate('detectedPlate', rect, cameraImage, detection.image, highlights, detection);
+      }
+    }
+
+    _onDetectPlate.add(_detectedPlates);
+    if (highlights.isNotEmpty) {
+      highlightedCustomPaints.add(highlights);
+      await Future<void>.delayed(const Duration(seconds: 2));
+      _isProcessing = false;
+      return;
+    }
+    highlightedCustomPaints.add(null);
+    await Future<void>.delayed(const Duration(seconds: 2));
+    _isProcessing = false;
+    return null;
+  }
+
+  ///
+  ///
+  ///
+  void _addPlateToList(String detectedPlate, Uint8List image, Rect highlightedArea) {
     if (!_detectedPlates.any((Plate plate) => plate.plate == detectedPlate)) {
       _detectedPlates.add(Plate(
         plate: detectedPlate,
-        imageBytes: image.bytes!,
+        imageBytes: image,
         highlightedArea: highlightedArea,
       ));
     }
@@ -254,11 +232,7 @@ class HomeController {
   ///
   ///
   String _normalizePlate(String plate) {
-    return plate
-        .trim()
-        .replaceAll(' ', '')
-        .replaceAll('-', '')
-        .replaceAll('.', '');
+    return plate.trim().replaceAll(' ', '').replaceAll('-', '').replaceAll('.', '');
   }
 
   ///
@@ -274,22 +248,16 @@ class HomeController {
   void _highlightDetectedPlate(
     String detectedPlate,
     Rect rect,
-    InputImage inputImage,
+    CameraImage inputImage,
+    Uint8List imageBytes,
     List<CustomPaint> customPaints,
+    Detection detection,
   ) {
-    _addPlateToList(detectedPlate, inputImage, rect);
-    Rect betterRect = Rect.fromLTRB(
-      rect.left - 15,
-      rect.top,
-      rect.right,
-      rect.bottom,
-    );
+    _addPlateToList(detectedPlate, imageBytes, rect);
+
     CustomPaint customPaint = CustomPaint(
-      painter: CustomTextRecognizerPainter(
-        betterRect,
-        inputImage.inputImageData!.size,
-        inputImage.inputImageData!.imageRotation,
-      ),
+      painter: CustomTextRecognizerPainter(rect, Size(inputImage.height.toDouble(), inputImage.width.toDouble()),
+          InputImageRotation.rotation0deg, '${detection.tag} - ${detection.confidence.toStringAsFixed(3)}'),
     );
     customPaints.add(customPaint);
   }
@@ -297,13 +265,14 @@ class HomeController {
   ///
   ///
   ///
-// void dispose() {
-//   _onDetectPlate.close();
-//   _textRecognizer?.close();
-//   _recognitionCameraController.dispose();
-//   cameraController.dispose();
-//   highlightedCustomPaints.close();
-//   isCameraLoaded.dispose();
-//   isStreaming.dispose();
-// }
+  void dispose() {
+    _onDetectPlate.close();
+    // _textRecognizer?.close();
+    // _recognitionCameraController.dispose();
+    cameraController.dispose();
+    highlightedCustomPaints.close();
+    isCameraLoaded.dispose();
+    isStreaming.dispose();
+    _vision.closeYoloModel();
+  }
 }

@@ -12,11 +12,12 @@ class CustomTextRecognizerPainter extends CustomPainter {
   ///
   ///
   ///
-  CustomTextRecognizerPainter(this.rect, this.absoluteImageSize, this.rotation);
+  CustomTextRecognizerPainter(this.rect, this.absoluteImageSize, this.rotation, this.tag);
 
   final Rect rect;
   final Size absoluteImageSize;
   final InputImageRotation rotation;
+  final String tag;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -31,7 +32,7 @@ class CustomTextRecognizerPainter extends CustomPainter {
       ParagraphStyle(textAlign: TextAlign.left, fontSize: 16, textDirection: TextDirection.ltr),
     );
     builder.pushStyle(ui.TextStyle(color: Colors.lightGreenAccent, background: background));
-    // builder.addText(recognizedLine.text);
+    builder.addText(tag);
     builder.pop();
 
     final double left = translateX(rect.left, rotation, size, absoluteImageSize);

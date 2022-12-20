@@ -1,6 +1,5 @@
 import 'package:alvaro/controllers/home_controller.dart';
 import 'package:alvaro/widgets/custom_drawer_plate.dart';
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 ///
@@ -51,24 +50,48 @@ class _HomeScreenState extends State<HomeScreen> {
               valueListenable: _controller.isCameraLoaded,
               builder: (BuildContext context, bool value, Widget? child) {
                 if (value) {
-                  return CameraPreview(
-                    _controller.cameraController,
-                    child: StreamBuilder<List<CustomPaint>?>(
-                      stream: _controller.highlightedCustomPaints.stream,
-                      builder: (
-                        BuildContext context,
-                        AsyncSnapshot<List<CustomPaint>?> snapshot,
-                      ) {
-                        if (snapshot.data == null) {
-                          return Container();
-                        }
-                        return Stack(
-                          fit: StackFit.expand,
-                          children: snapshot.data!,
-                        );
-                      },
-                    ),
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      AspectRatio(
+                        aspectRatio: _controller.cameraController.value.aspectRatio,
+                        child: _controller.cameraController.buildPreview(),
+                      ),
+                      StreamBuilder<List<CustomPaint>?>(
+                        stream: _controller.highlightedCustomPaints.stream,
+                        builder: (
+                          BuildContext context,
+                          AsyncSnapshot<List<CustomPaint>?> snapshot,
+                        ) {
+                          if (snapshot.data == null) {
+                            return Container();
+                          }
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: snapshot.data!,
+                          );
+                        },
+                      ),
+                    ],
                   );
+                  // return CameraPreview(
+                  //   _controller.cameraController,
+                  //   child: StreamBuilder<List<CustomPaint>?>(
+                  //     stream: _controller.highlightedCustomPaints.stream,
+                  //     builder: (
+                  //       BuildContext context,
+                  //       AsyncSnapshot<List<CustomPaint>?> snapshot,
+                  //     ) {
+                  //       if (snapshot.data == null) {
+                  //         return Container();
+                  //       }
+                  //       return Stack(
+                  //         fit: StackFit.expand,
+                  //         children: snapshot.data!,
+                  //       );
+                  //     },
+                  //   ),
+                  // );
                 }
                 return const Center(
                   child: SizedBox(
@@ -87,8 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: <Widget>[
                 ValueListenableBuilder<bool>(
                   valueListenable: _controller.isStreaming,
-                  builder:
-                      (BuildContext context, bool isStreaming, Widget? child) {
+                  builder: (BuildContext context, bool isStreaming, Widget? child) {
                     return ElevatedButton(
                       onPressed: _controller.startMonitoring,
                       child: Text(isStreaming ? 'Parar' : 'Ativar'),
