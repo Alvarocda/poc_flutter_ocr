@@ -52,13 +52,13 @@ class HomeController {
     _cameras = await availableCameras();
     cameraController = CameraController(
       _cameras.first,
-      ResolutionPreset.medium,
+      ResolutionPreset.low,
       imageFormatGroup: ImageFormatGroup.yuv420,
       enableAudio: false,
     );
     await cameraController.initialize();
     _vision = FlutterVision();
-    await _vision.loadYoloModel(modelPath: 'assets/best.tflite', labels: 'assets/labels.txt');
+    await _vision.loadYoloModel(modelPath: 'assets/best.tflite', labels: 'assets/labels.txt', useGpu: true);
     isCameraLoaded.value = true;
   }
 

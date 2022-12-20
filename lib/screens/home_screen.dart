@@ -74,24 +74,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   );
-                  // return CameraPreview(
-                  //   _controller.cameraController,
-                  //   child: StreamBuilder<List<CustomPaint>?>(
-                  //     stream: _controller.highlightedCustomPaints.stream,
-                  //     builder: (
-                  //       BuildContext context,
-                  //       AsyncSnapshot<List<CustomPaint>?> snapshot,
-                  //     ) {
-                  //       if (snapshot.data == null) {
-                  //         return Container();
-                  //       }
-                  //       return Stack(
-                  //         fit: StackFit.expand,
-                  //         children: snapshot.data!,
-                  //       );
-                  //     },
-                  //   ),
-                  // );
                 }
                 return const Center(
                   child: SizedBox(
