@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:alvaro/models/detection.dart';
 import 'package:alvaro/models/plate.dart';
-import 'package:alvaro/screens/static_image_screen.dart';
 import 'package:alvaro/widgets/custom_text_recognize_painter.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +11,8 @@ import 'package:flutter_vision/src/utils/response_handler.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
+
+import '../screens/static_image_screen.dart';
 
 ///
 ///
@@ -146,6 +147,7 @@ class HomeController {
   Future<void> _processStaticImage(Uint8List bytes, int height, int width) async {
     _isProcessing = true;
     List<CustomPaint> highlights = <CustomPaint>[];
+    List<Detection> detections = <Detection>[];
     ResponseHandler responseHandler = await _vision.yoloOnImage(
       bytesList: bytes,
       imageHeight: height,
@@ -169,6 +171,7 @@ class HomeController {
           highlights,
           detection,
         );
+        detections.add(detection);
       }
     }
 
@@ -177,8 +180,14 @@ class HomeController {
       highlightedCustomPaints.add(highlights);
       // await Future<void>.delayed(const Duration(seconds: 1));
       _isProcessing = false;
-      Navigator.of(context)
-          .push(MaterialPageRoute(builder: (_) => StaticImageScreen(image: bytes, detectionsRect: highlights)));
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => StaticImageScreen(
+            image: bytes,
+            detections: detections,
+          ),
+        ),
+      );
       return;
     }
     highlightedCustomPaints.add(null);
@@ -281,6 +290,7 @@ class HomeController {
           '${detection.tag} - ${detection.confidence.toStringAsFixed(3)}'),
     );
     customPaints.add(customPaint);
+    detection.rect = customPaint;
   }
 
   void didChangeAppLifeCycleState(AppLifecycleState state) {

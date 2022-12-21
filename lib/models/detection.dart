@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+
 ///
 ///
 ///
@@ -11,6 +13,7 @@ class Detection {
   late double x2;
   late double y1;
   late double y2;
+  late CustomPaint rect;
 
   ///
   ///
