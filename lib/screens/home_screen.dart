@@ -21,8 +21,8 @@ class HomeScreen extends StatefulWidget {
 ///
 ///
 ///
-class _HomeScreenState extends State<HomeScreen> {
-  final HomeController _controller = HomeController();
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  late final HomeController _controller = HomeController(context: context);
 
   @override
   void initState() {
@@ -109,5 +109,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  ///
+  ///
+  ///
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _controller.didChangeAppLifeCycleState(state);
   }
 }

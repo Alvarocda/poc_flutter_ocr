@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:alvaro/models/detection.dart';
 import 'package:alvaro/models/plate.dart';
+import 'package:alvaro/screens/static_image_screen.dart';
 import 'package:alvaro/widgets/custom_text_recognize_painter.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -16,10 +17,12 @@ import 'package:image_picker/image_picker.dart';
 ///
 ///
 class HomeController {
+  final BuildContext context;
+
   ///
   ///
   ///
-  HomeController();
+  HomeController({required this.context});
 
   late List<CameraDescription> _cameras;
 
@@ -47,11 +50,11 @@ class HomeController {
   ///
   ///
   ///
-  Future<void> initCamera() async {
+  Future<void> initCamera({CameraDescription? cameraDescription}) async {
     isCameraLoaded.value = false;
     _cameras = await availableCameras();
     cameraController = CameraController(
-      _cameras.first,
+      cameraDescription ?? _cameras.first,
       ResolutionPreset.low,
       imageFormatGroup: ImageFormatGroup.yuv420,
       enableAudio: false,
@@ -131,9 +134,8 @@ class HomeController {
       // InputImage inputImage = InputImage.fromFilePath(xFile.path);
 
       img.Image? decodedImage = img.decodeImage(await xFile.readAsBytes());
+      await _processStaticImage(await xFile.readAsBytes(), decodedImage!.height, decodedImage.width);
 
-      await _processStaticImage(
-          decodedImage!.getBytes(format: img.Format.rgb), decodedImage.height, decodedImage.width);
       // await _processImage(inputImage);
     }
   }
@@ -156,9 +158,17 @@ class HomeController {
       for (Map<String, dynamic> detectedObject in responseHandler.data) {
         Detection detection = Detection.fromMap(detectedObject);
 
-        // Rect rect = Rect.fromPoints(Offset(detection.x1, detection.y1), Offset(detection.x2, detection.y2));
+        Rect rect = Rect.fromPoints(Offset(detection.x1, detection.y1), Offset(detection.x2, detection.y2));
 
-        // _highlightDetectedPlate('detectedPlate', rect, cameraImage, detection.image, highlights, detection);
+        _highlightDetectedPlate(
+          'detectedPlate',
+          rect,
+          height.toDouble(),
+          width.toDouble(),
+          detection.image,
+          highlights,
+          detection,
+        );
       }
     }
 
@@ -167,6 +177,8 @@ class HomeController {
       highlightedCustomPaints.add(highlights);
       // await Future<void>.delayed(const Duration(seconds: 1));
       _isProcessing = false;
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => StaticImageScreen(image: bytes, detectionsRect: highlights)));
       return;
     }
     highlightedCustomPaints.add(null);
@@ -184,8 +196,9 @@ class HomeController {
     }
     _isProcessing = true;
     List<CustomPaint> highlights = <CustomPaint>[];
-    ResponseHandler responseHandler = await _vision.yoloOnFrame(
-      bytesList: cameraImage.planes.map((Plane plane) => plane.bytes).toList(),
+    ResponseHandler responseHandler = await _vision.yoloOnImage(
+      // bytesList: cameraImage.planes.map((Plane plane) => plane.bytes).toList(),
+      bytesList: Uint8List.fromList(cameraImage.planes.map((e) => e.bytesPerRow).toList()),
       imageHeight: cameraImage.height,
       imageWidth: cameraImage.width,
       confThreshold: 0.5,
@@ -198,19 +211,26 @@ class HomeController {
 
         Rect rect = Rect.fromPoints(Offset(detection.x1, detection.y1), Offset(detection.x2, detection.y2));
 
-        _highlightDetectedPlate('detectedPlate', rect, cameraImage, detection.image, highlights, detection);
+        _highlightDetectedPlate(
+          'detectedPlate',
+          rect,
+          cameraImage.height.toDouble(),
+          cameraImage.width.toDouble(),
+          detection.image,
+          highlights,
+          detection,
+        );
       }
     }
 
     _onDetectPlate.add(_detectedPlates);
+    await Future<void>.delayed(const Duration(seconds: 1));
     if (highlights.isNotEmpty) {
       highlightedCustomPaints.add(highlights);
-      await Future<void>.delayed(const Duration(seconds: 2));
       _isProcessing = false;
       return;
     }
     highlightedCustomPaints.add(null);
-    await Future<void>.delayed(const Duration(seconds: 2));
     _isProcessing = false;
     return null;
   }
@@ -248,7 +268,8 @@ class HomeController {
   void _highlightDetectedPlate(
     String detectedPlate,
     Rect rect,
-    CameraImage inputImage,
+    double imageHeight,
+    double imageWidth,
     Uint8List imageBytes,
     List<CustomPaint> customPaints,
     Detection detection,
@@ -256,10 +277,25 @@ class HomeController {
     _addPlateToList(detectedPlate, imageBytes, rect);
 
     CustomPaint customPaint = CustomPaint(
-      painter: CustomTextRecognizerPainter(rect, Size(inputImage.height.toDouble(), inputImage.width.toDouble()),
-          InputImageRotation.rotation0deg, '${detection.tag} - ${detection.confidence.toStringAsFixed(3)}'),
+      painter: CustomTextRecognizerPainter(rect, Size(imageHeight, imageWidth), InputImageRotation.rotation0deg,
+          '${detection.tag} - ${detection.confidence.toStringAsFixed(3)}'),
     );
     customPaints.add(customPaint);
+  }
+
+  void didChangeAppLifeCycleState(AppLifecycleState state) {
+    final CameraController cameraController = this.cameraController;
+
+    // App state changed before we got the chance to initialize.
+    if (!cameraController.value.isInitialized) {
+      return;
+    }
+
+    if (state == AppLifecycleState.inactive) {
+      cameraController.dispose();
+    } else if (state == AppLifecycleState.resumed) {
+      initCamera(cameraDescription: cameraController.description);
+    }
   }
 
   ///
