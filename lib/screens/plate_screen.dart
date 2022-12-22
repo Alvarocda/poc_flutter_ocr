@@ -15,7 +15,10 @@ class PlateScreen extends StatelessWidget {
       body: Column(
         children: <Widget>[
           Text(plate.plate),
+          Text('Bytes'),
           Image.memory(plate.imageBytes),
+          Text('File'),
+          Image.file(plate.imageFile!),
         ],
       ),
     );

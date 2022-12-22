@@ -83,11 +83,10 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
 
     plateImage = img.copyResize(plateImage, width: width.toInt(), height: height.toInt());
 
-    plateImage = img.gaussianBlur(plateImage, 1);
+    plateImage = img.gaussianBlur(plateImage, 2);
 
     Uint8List imageBytes = Uint8List.fromList(img.encodeJpg(plateImage));
 
-    Uint8List yuvImage = Uint8List.fromList(convertGreytoYuv(imageBytes.toList(), plateImage.width, plateImage.height));
     Directory tempDir = await getTemporaryDirectory();
 
     File file = await File(pth.join(tempDir.path, 'ocr.png')).create(recursive: true);
@@ -96,28 +95,21 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
       await tempDir.create(recursive: true);
     }
 
-    // File file = File.fromRawPath(detection.image);
-
     if (file.existsSync()) {
       await file.delete();
     }
 
-    await file.writeAsBytes(yuvImage);
+    file = await file.writeAsBytes(detection.image);
+
+    InputImage inputImage = InputImage.fromFile(file);
 
     TextRecognizer textRecognizer = TextRecognizer();
 
-    // InputImageData inputImageData = InputImageData(
-    //   size: Size(plateImage.width.toDouble(), plateImage.height.toDouble()),
-    //   imageRotation: InputImageRotation.rotation0deg,
-    //   inputImageFormat: InputImageFormat.yuv420,
-    //   planeData: null,
-    // );
+    RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
 
-    InputImage inputImage = InputImage.fromFilePath(file.path);
+    await textRecognizer.close();
 
-    // RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-
-    Plate plate = Plate(plate: 'asdsad', imageBytes: imageBytes);
+    Plate plate = Plate(plate: 'recognizedText.text', imageBytes: imageBytes, imageFile: file);
 
     // await textRecognizer.close();
 
@@ -126,8 +118,6 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
         builder: (_) => PlateScreen(plate: plate),
       ),
     );
-
-    // img.copyResize(croppedPlate, width: newWidth.toInt(), height: newHeight.toInt());
   }
 
   ///
@@ -158,11 +148,11 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     return Uint8List.fromList(img.encodeJpg(image!));
   }
 
-  Uint8List convertGreytoYuv(List<int> grey, int width, int height) {
-    int size = width * height;
-    List<int> yuvRaw = List.empty(growable: true);
-    yuvRaw.addAll(grey);
-    yuvRaw.addAll(List.filled(size ~/ 2, 0));
-    return Uint8List.fromList(yuvRaw);
-  }
+// Uint8List convertGreytoYuv(List<int> grey, int width, int height) {
+//   int size = width * height;
+//   List<int> yuvRaw = List.empty(growable: true);
+//   yuvRaw.addAll(grey);
+//   yuvRaw.addAll(List.filled(size ~/ 2, 0));
+//   return Uint8List.fromList(yuvRaw);
+// }
 }
