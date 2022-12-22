@@ -205,9 +205,8 @@ class HomeController {
     }
     _isProcessing = true;
     List<CustomPaint> highlights = <CustomPaint>[];
-    ResponseHandler responseHandler = await _vision.yoloOnImage(
-      // bytesList: cameraImage.planes.map((Plane plane) => plane.bytes).toList(),
-      bytesList: Uint8List.fromList(cameraImage.planes.map((e) => e.bytesPerRow).toList()),
+    ResponseHandler responseHandler = await _vision.yoloOnFrame(
+      bytesList: cameraImage.planes.map((Plane plane) => plane.bytes).toList(),
       imageHeight: cameraImage.height,
       imageWidth: cameraImage.width,
       confThreshold: 0.5,
@@ -252,7 +251,7 @@ class HomeController {
       _detectedPlates.add(Plate(
         plate: detectedPlate,
         imageBytes: image,
-        highlightedArea: highlightedArea,
+        // highlightedArea: highlightedArea,
       ));
     }
   }
