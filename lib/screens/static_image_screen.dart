@@ -70,13 +70,23 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     double width = detection.x2 - detection.x1;
     double height = detection.y2 - detection.y1;
 
-    plateImage = img.copyCrop(
-      plateImage,
-      detection.x1.toInt() - 10,
-      detection.y1.toInt() - 10,
-      width.toInt() + 20,
-      height.toInt() + 20,
-    );
+    if (height <= 32 || width <= 32) {
+      plateImage = img.copyCrop(
+        plateImage,
+        detection.x1.toInt() - 20,
+        detection.y1.toInt() - 20,
+        width.toInt() + 30,
+        height.toInt() + 30,
+      );
+    } else {
+      plateImage = img.copyCrop(
+        plateImage,
+        detection.x1.toInt() - 10,
+        detection.y1.toInt() - 10,
+        width.toInt() + 20,
+        height.toInt() + 20,
+      );
+    }
 
     width += width * 2;
     height += height * 2;
@@ -84,8 +94,8 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     plateImage = img.copyResize(plateImage, width: width.toInt(), height: height.toInt());
 
     plateImage = img.gaussianBlur(plateImage, 2);
-
-    Uint8List imageBytes = Uint8List.fromList(img.encodeJpg(plateImage));
+    // img.contrast(plateImage, 900);
+    Uint8List imageBytes = Uint8List.fromList(img.encodePng(plateImage));
 
     Directory tempDir = await getTemporaryDirectory();
 
@@ -99,7 +109,7 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
       await file.delete();
     }
 
-    file = await file.writeAsBytes(detection.image);
+    file = await file.writeAsBytes(imageBytes);
 
     InputImage inputImage = InputImage.fromFile(file);
 
@@ -109,7 +119,7 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
 
     await textRecognizer.close();
 
-    Plate plate = Plate(plate: 'recognizedText.text', imageBytes: imageBytes, imageFile: file);
+    Plate plate = Plate(plate: recognizedText.text, imageBytes: imageBytes, imageFile: file);
 
     // await textRecognizer.close();
 
