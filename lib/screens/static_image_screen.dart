@@ -17,7 +17,9 @@ class StaticImageScreen extends StatefulWidget {
   final Uint8List image;
   final List<Detection> detections;
 
-  const StaticImageScreen({required this.image, required this.detections, Key? key}) : super(key: key);
+  const StaticImageScreen(
+      {required this.image, required this.detections, Key? key})
+      : super(key: key);
 
   ///
   ///
@@ -49,7 +51,7 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
             child: ElevatedButton(
               child: const Text('Extract Plate text'),
               onPressed: () {
-                _extractPlate(widget.detections.first);
+                extractAllPlates();
               },
             ),
           )
@@ -59,11 +61,34 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     );
   }
 
+  Future<void> extractAllPlates() async {
+    List<Plate> plates = <Plate>[];
+    for (Detection detection in widget.detections) {
+      try {
+        Plate? plate = await _extractPlate(detection);
+        if (plate != null) {
+          plates.add(plate);
+        }
+      } catch (e) {
+        print('Error $e');
+      }
+    }
+    if (plates.isNotEmpty) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PlateScreen(
+            plates: plates,
+          ),
+        ),
+      );
+    }
+  }
+
   ///
   ///
   ///
-  Future<void> _extractPlate(Detection detection) async {
-    img.Image? plateImage = img.decodeImage(widget.image.toList());
+  Future<Plate?> _extractPlate(Detection detection) async {
+    img.Image? plateImage = img.decodeImage(widget.image);
 
     plateImage = img.grayscale(plateImage!);
 
@@ -91,15 +116,17 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     width += width * 2;
     height += height * 2;
 
-    plateImage = img.copyResize(plateImage, width: width.toInt(), height: height.toInt());
+    plateImage = img.copyResize(plateImage,
+        width: width.toInt(), height: height.toInt());
 
-    plateImage = img.gaussianBlur(plateImage, 2);
-    // img.contrast(plateImage, 900);
+    // img.contrast(plateImage, 500);
+    // plateImage = img.gaussianBlur(plateImage, 2);
     Uint8List imageBytes = Uint8List.fromList(img.encodePng(plateImage));
 
     Directory tempDir = await getTemporaryDirectory();
 
-    File file = await File(pth.join(tempDir.path, 'ocr.png')).create(recursive: true);
+    File file = await File(pth.join(tempDir.path, 'ocr${tempDir.hashCode}.png'))
+        .create(recursive: true);
 
     if (!tempDir.existsSync()) {
       await tempDir.create(recursive: true);
@@ -115,18 +142,15 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
 
     TextRecognizer textRecognizer = TextRecognizer();
 
-    RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+    RecognizedText recognizedText =
+        await textRecognizer.processImage(inputImage);
 
     await textRecognizer.close();
 
-    Plate plate = Plate(plate: recognizedText.text, imageBytes: imageBytes, imageFile: file);
-
-    // await textRecognizer.close();
-
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PlateScreen(plate: plate),
-      ),
+    return Plate(
+      plate: recognizedText.text,
+      imageBytes: imageBytes,
+      imageFile: file,
     );
   }
 

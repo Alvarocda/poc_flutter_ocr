@@ -2,9 +2,9 @@ import 'package:alvaro/models/plate.dart';
 import 'package:flutter/material.dart';
 
 class PlateScreen extends StatelessWidget {
-  final Plate plate;
+  final List<Plate> plates;
 
-  const PlateScreen({required this.plate, Key? key}) : super(key: key);
+  const PlateScreen({required this.plates, Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -12,15 +12,33 @@ class PlateScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('Detected plate'),
       ),
-      body: Column(
-        children: <Widget>[
-          Text(plate.plate),
-          Text('Bytes'),
-          Image.memory(plate.imageBytes),
-          Text('File'),
-          Image.file(plate.imageFile!),
-        ],
+      body: SingleChildScrollView(
+        child: Column(
+          children: plateCards(),
+        ),
       ),
     );
+  }
+
+  List<Widget> plateCards() {
+    List<Widget> cardPlates = <Widget>[];
+    for (Plate plate in plates) {
+      Widget card = Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Card(
+          child: Column(
+            children: [
+              Text(plate.plate),
+              Text('Bytes'),
+              Image.memory(plate.imageBytes),
+              Text('File'),
+              Image.file(plate.imageFile!),
+            ],
+          ),
+        ),
+      );
+      cardPlates.add(card);
+    }
+    return cardPlates;
   }
 }
