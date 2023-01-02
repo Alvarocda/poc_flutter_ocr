@@ -108,17 +108,29 @@ class HomeController {
 
     img.Image? grayScaleImage = img.decodeImage(bytes);
 
-    grayScaleImage = img.grayscale(grayScaleImage!);
+    if (grayScaleImage!.width < 1920) {
+      double targetHeight = grayScaleImage.height + grayScaleImage.height * 0.5;
+      double targetWidth = grayScaleImage.width + grayScaleImage.width * 0.5;
 
-    double targetHeight = grayScaleImage.height + grayScaleImage.height * 0.5;
-    double targetWidth = grayScaleImage.width + grayScaleImage.width * 0.5;
+      grayScaleImage = img.copyResize(
+        grayScaleImage,
+        width: targetWidth.toInt(),
+        height: targetHeight.toInt(),
+        interpolation: img.Interpolation.cubic,
+      );
+    } else if (grayScaleImage.width > 1920) {
+      double aspectRatio = calculateAspectRatio(grayScaleImage.width, grayScaleImage.height, 1920, 1080);
+      double newWidth = grayScaleImage.width - grayScaleImage.width * aspectRatio;
+      double newHeight = grayScaleImage.height - grayScaleImage.height * aspectRatio;
+      grayScaleImage = img.copyResize(
+        grayScaleImage,
+        width: newWidth.toInt(),
+        height: newHeight.toInt(),
+        interpolation: img.Interpolation.cubic,
+      );
+    }
 
-    grayScaleImage = img.copyResize(
-      grayScaleImage,
-      width: targetWidth.toInt(),
-      height: targetHeight.toInt(),
-      interpolation: img.Interpolation.cubic,
-    );
+    grayScaleImage = img.grayscale(grayScaleImage);
 
     // img.gaussianBlur(grayScaleImage, 2);
 
@@ -232,20 +244,6 @@ class HomeController {
         // highlightedArea: highlightedArea,
       ));
     }
-  }
-
-  ///
-  ///
-  ///
-  String _normalizePlate(String plate) {
-    return plate.trim().replaceAll(' ', '').replaceAll('-', '').replaceAll('.', '');
-  }
-
-  ///
-  ///
-  ///
-  bool _isValidPlate(String plate) {
-    return plateRegex.hasMatch(plate);
   }
 
   ///

@@ -129,7 +129,7 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     }
 
     return Plate(
-      plate: licensePlate,
+      plate: licensePlate.toUpperCase(),
       imageBytes: Uint8List.fromList(img.encodeJpg(plateImage)),
       imageFile: file,
     );
@@ -163,12 +163,120 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     if (recognizedText.text.isEmpty || recognizedText.text.length < 7) {
       return null;
     }
-    String rawText =
-        recognizedText.text.replaceAll('\n', '').replaceAll(' ', '').replaceAll('-', '').replaceAll('.', '');
+    String rawText = normalizePlate(recognizedText.text);
     if (plateRegex.hasMatch(rawText)) {
       RegExpMatch? match = plateRegex.firstMatch(rawText);
       return match?.group(0);
+    } else {
+      int elementIndex = 0;
+      for (TextBlock block in recognizedText.blocks) {
+        for (TextLine line in block.lines) {
+          elementIndex = 0;
+          for (TextElement element in line.elements) {
+            String detectedPlate = normalizePlate(element.text);
+            // dev.debugger(when: detectedPlate == 'XAS');
+            // dev.debugger(when: detectedPlate == '4550');
+
+            /// If the text is not exactly 7 characters long, it will try to concatenate the text of the previous
+            /// element with the current element and check if the junction of the two forms a valid plate.
+            /// As the algorithm is working with TextElements, it ends up splitting into different elements when it
+            /// detects a space in the middle of the plate.
+            if (detectedPlate.length == 7) {
+              if (isValidPlate(detectedPlate)) {
+                return detectedPlate;
+              } else {
+                String formatedPlate = formatPlate(detectedPlate);
+                if (isValidPlate(formatedPlate)) {
+                  return formatedPlate;
+                }
+              }
+
+              /// If the text in the current element has less than 7 letters, it will check if the text size is 4 characters
+              /// and if it is composed of 4 numbers, if it is composed of 4 numbers, it will check if the text in the
+              /// previous element is composed of 3 letters, if both conditions are true, the algorithm will understand
+              /// that it can be a plate and will assemble a String with the junction of the two.
+            } else if (detectedPlate.length == 4) {
+              if (elementIndex == 0) {
+                return null;
+              }
+              TextElement lastTextElement = line.elements[elementIndex - 1];
+              if (RegExp('[a-zA-Z]{3}').hasMatch(lastTextElement.text)) {
+                String detectedPlate = '${lastTextElement.text}${element.text}';
+                if (detectedPlate.length != 7) {
+                  elementIndex++;
+                  continue;
+                }
+
+                detectedPlate = normalizePlate(detectedPlate);
+
+                if (isValidPlate(detectedPlate)) {
+                  return detectedPlate;
+                } else {
+                  String formatedPlate = formatPlate(detectedPlate);
+                  if (isValidPlate(formatedPlate)) {
+                    return formatedPlate;
+                  }
+                }
+              }
+            } else {
+              print('Discarded plate: ${element.text}');
+            }
+            elementIndex++;
+          }
+        }
+      }
     }
     return recognizedText.text;
+  }
+
+  ///
+  ///
+  ///
+  String normalizePlate(String plate) =>
+      plate.trim().replaceAll('\n', '').replaceAll(' ', '').replaceAll('-', '').replaceAll('.', '').replaceAll(':', '');
+
+  ///
+  ///
+  ///
+  bool isValidPlate(String plate) => plateRegex.hasMatch(plate);
+
+  ///
+  ///
+  ///
+  String formatPlate(String plate) {
+    String firstPart = plate.substring(0, 3).toUpperCase();
+    String secondPart = plate.substring(3, 7).toUpperCase();
+    String formatedSecondPart = '';
+    if (!RegExp('[a-zA-Z]{3}').hasMatch(firstPart)) {
+      firstPart = firstPart
+          .replaceAll('0', 'O')
+          .replaceAll('1', 'I')
+          .replaceAll('6', 'G')
+          .replaceAll('8', 'B')
+          .replaceAll('2', 'Z')
+          .replaceAll('11', 'H')
+          .replaceAll('5', 'S');
+    }
+    if (!RegExp('[0-9][A-Za-z0-9][0-9]{2}').hasMatch(secondPart)) {
+      List<String> secondPartLetters = secondPart.split('');
+      int letterAux = 1;
+      StringBuffer newSecondPart = StringBuffer();
+      for (String letter in secondPartLetters) {
+        if (RegExp('[0-9]').hasMatch(letter)) {
+          newSecondPart.write(letter);
+        } else {
+          letter = letter.replaceAll('O', '0').replaceAll('T', '1').replaceAll('Z', '2').replaceAll('S', '5');
+          if (letterAux != 2) {
+            letter = letter.replaceAll('H', '11').replaceAll('I', '1').replaceAll('B', '8').replaceAll('G', '6');
+          }
+          newSecondPart.write(letter);
+        }
+        letterAux++;
+      }
+      formatedSecondPart = newSecondPart.toString();
+    }
+    print('First part: $firstPart - Second Part $formatedSecondPart');
+
+    return '${firstPart}${formatedSecondPart}';
   }
 }

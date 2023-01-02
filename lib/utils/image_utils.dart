@@ -20,7 +20,7 @@ Uint8List convertGreytoYuv(List<int> greyscaleImage, int width, int height) {
 ///
 ///
 ///
-double calculateEnlargeAspectRatio(int srcWidth, int srcHeight, int targetWidth, int targetHeight) =>
+double calculateAspectRatio(int srcWidth, int srcHeight, int targetWidth, int targetHeight) =>
     min(targetWidth / srcWidth, targetHeight / srcHeight);
 
 ///
