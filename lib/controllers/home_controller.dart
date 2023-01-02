@@ -142,8 +142,8 @@ class HomeController {
       bytesList: encodedImage,
       imageHeight: grayScaleImage.height,
       imageWidth: grayScaleImage.width,
-      confThreshold: 0.5,
-      iouThreshold: 0.5,
+      confThreshold: 0.8,
+      iouThreshold: 0.8,
     );
 
     if (responseHandler.type == 'success') {
