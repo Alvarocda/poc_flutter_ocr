@@ -110,6 +110,18 @@ class HomeController {
 
     grayScaleImage = img.grayscale(grayScaleImage!);
 
+    double targetHeight = grayScaleImage.height + grayScaleImage.height * 0.5;
+    double targetWidth = grayScaleImage.width + grayScaleImage.width * 0.5;
+
+    grayScaleImage = img.copyResize(
+      grayScaleImage,
+      width: targetWidth.toInt(),
+      height: targetHeight.toInt(),
+      interpolation: img.Interpolation.cubic,
+    );
+
+    // img.gaussianBlur(grayScaleImage, 2);
+
     Uint8List encodedImage = Uint8List.fromList(img.encodeJpg(grayScaleImage));
 
     encodedImage = convertGreytoYuv(encodedImage.toList(), grayScaleImage.width, grayScaleImage.height);

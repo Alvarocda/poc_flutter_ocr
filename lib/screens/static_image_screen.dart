@@ -29,6 +29,8 @@ class StaticImageScreen extends StatefulWidget {
 ///
 ///
 class _StaticImageScreenState extends State<StaticImageScreen> {
+  final RegExp plateRegex = RegExp('[a-zA-Z]{3}[0-9][A-Za-z0-9][0-9]{2}', caseSensitive: false);
+
   ///
   ///
   ///
@@ -101,14 +103,12 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
       height.toInt() + 20,
     );
 
-    double targetHeight = plateImage.height + plateImage.height * 0.8;
-    double targetWidth = plateImage.width + plateImage.width * 0.8;
-
-    plateImage = img.copyResize(
-      plateImage,
-      width: targetWidth.toInt(),
-      height: targetHeight.toInt(),
-    );
+    // plateImage = img.copyResize(
+    //   plateImage,
+    //   width: targetWidth.toInt(),
+    //   height: targetHeight.toInt(),
+    //   interpolation: img.Interpolation.cubic,
+    // );
 
     // img.gaussianBlur(plateImage, 5);
 
@@ -120,10 +120,16 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
 
     RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
 
+    String? licensePlate = extractLicensePlate(recognizedText);
+
     await textRecognizer.close();
 
+    if (licensePlate == null) {
+      return null;
+    }
+
     return Plate(
-      plate: recognizedText.text,
+      plate: licensePlate,
       imageBytes: Uint8List.fromList(img.encodeJpg(plateImage)),
       imageFile: file,
     );
@@ -135,14 +141,6 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
   Uint8List imageWithRects() {
     img.Image? image = img.decodeImage(widget.image.toList());
     for (Detection detection in widget.detections) {
-      // img.drawRect(
-      //   image!,
-      //   detection.x1.toInt(),
-      //   detection.y1.toInt(),
-      //   detection.x2.toInt(),
-      //   detection.y2.toInt(),
-      //   0xFF00FF00,
-      // );
       for (int i = 0; i < 10; i++) {
         img.drawRect(
           image!,
@@ -155,5 +153,22 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
       }
     }
     return Uint8List.fromList(img.encodeJpg(image!));
+  }
+
+  ///
+  ///
+  ///
+  String? extractLicensePlate(RecognizedText recognizedText) {
+    // if the detected plate does not meet the minimum requirements for a license plate, discard the text
+    if (recognizedText.text.isEmpty || recognizedText.text.length < 7) {
+      return null;
+    }
+    String rawText =
+        recognizedText.text.replaceAll('\n', '').replaceAll(' ', '').replaceAll('-', '').replaceAll('.', '');
+    if (plateRegex.hasMatch(rawText)) {
+      RegExpMatch? match = plateRegex.firstMatch(rawText);
+      return match?.group(0);
+    }
+    return recognizedText.text;
   }
 }
