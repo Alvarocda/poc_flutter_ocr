@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:alvaro/models/detection.dart';
 import 'package:alvaro/models/plate.dart';
+import 'package:alvaro/utils/image_utils.dart';
 import 'package:alvaro/widgets/custom_text_recognize_painter.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -84,50 +85,6 @@ class HomeController {
   ///
   ///
   ///
-  InputImage? _getStreamInputImage(CameraImage image) {
-    final Uint8List bytes = Uint8List.fromList(
-      image.planes.fold(
-        <int>[],
-        (List<int> previousValue, Plane element) => previousValue..addAll(element.bytes),
-      ),
-    );
-
-    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
-
-    final CameraDescription camera = _cameras.first;
-    final InputImageRotation? imageRotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation);
-    if (imageRotation == null) {
-      return null;
-    }
-
-    final InputImageFormat? inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (inputImageFormat == null) {
-      return null;
-    }
-
-    final List<InputImagePlaneMetadata> planeData = image.planes.map(
-      (Plane plane) {
-        return InputImagePlaneMetadata(
-          bytesPerRow: plane.bytesPerRow,
-          height: plane.height,
-          width: plane.width,
-        );
-      },
-    ).toList();
-
-    final InputImageData inputImageData = InputImageData(
-      size: imageSize,
-      imageRotation: imageRotation,
-      inputImageFormat: inputImageFormat,
-      planeData: planeData,
-    );
-
-    return InputImage.fromBytes(bytes: bytes, inputImageData: inputImageData);
-  }
-
-  ///
-  ///
-  ///
   Future<void> getGalleryImage() async {
     ImagePicker imagePicker = ImagePicker();
     XFile? xFile = await imagePicker.pickImage(source: ImageSource.gallery);
@@ -148,10 +105,19 @@ class HomeController {
     _isProcessing = true;
     List<CustomPaint> highlights = <CustomPaint>[];
     List<Detection> detections = <Detection>[];
+
+    img.Image? grayScaleImage = img.decodeImage(bytes);
+
+    grayScaleImage = img.grayscale(grayScaleImage!);
+
+    Uint8List encodedImage = Uint8List.fromList(img.encodeJpg(grayScaleImage));
+
+    encodedImage = convertGreytoYuv(encodedImage.toList(), grayScaleImage.width, grayScaleImage.height);
+
     ResponseHandler responseHandler = await _vision.yoloOnImage(
-      bytesList: bytes,
-      imageHeight: height,
-      imageWidth: width,
+      bytesList: encodedImage,
+      imageHeight: grayScaleImage.height,
+      imageWidth: grayScaleImage.width,
       confThreshold: 0.5,
       iouThreshold: 0.5,
     );
@@ -183,7 +149,7 @@ class HomeController {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => StaticImageScreen(
-            image: bytes,
+            image: encodedImage,
             detections: detections,
           ),
         ),

@@ -4,11 +4,10 @@ import 'dart:typed_data';
 import 'package:alvaro/models/detection.dart';
 import 'package:alvaro/models/plate.dart';
 import 'package:alvaro/screens/plate_screen.dart';
+import 'package:alvaro/utils/image_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as img;
-import 'package:path/path.dart' as pth;
-import 'package:path_provider/path_provider.dart';
 
 ///
 ///
@@ -17,9 +16,7 @@ class StaticImageScreen extends StatefulWidget {
   final Uint8List image;
   final List<Detection> detections;
 
-  const StaticImageScreen(
-      {required this.image, required this.detections, Key? key})
-      : super(key: key);
+  const StaticImageScreen({required this.image, required this.detections, Key? key}) : super(key: key);
 
   ///
   ///
@@ -74,13 +71,14 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
       }
     }
     if (plates.isNotEmpty) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
           builder: (_) => PlateScreen(
             plates: plates,
           ),
         ),
       );
+      await deleteAllCachedImages();
     }
   }
 
@@ -90,66 +88,43 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
   Future<Plate?> _extractPlate(Detection detection) async {
     img.Image? plateImage = img.decodeImage(widget.image);
 
-    plateImage = img.grayscale(plateImage!);
+    // img.grayscale(plateImage!);
 
     double width = detection.x2 - detection.x1;
     double height = detection.y2 - detection.y1;
 
-    if (height <= 32 || width <= 32) {
-      plateImage = img.copyCrop(
-        plateImage,
-        detection.x1.toInt() - 20,
-        detection.y1.toInt() - 20,
-        width.toInt() + 30,
-        height.toInt() + 30,
-      );
-    } else {
-      plateImage = img.copyCrop(
-        plateImage,
-        detection.x1.toInt() - 10,
-        detection.y1.toInt() - 10,
-        width.toInt() + 20,
-        height.toInt() + 20,
-      );
-    }
+    plateImage = img.copyCrop(
+      plateImage!,
+      detection.x1.toInt() - 10,
+      detection.y1.toInt() - 10,
+      width.toInt() + 20,
+      height.toInt() + 20,
+    );
 
-    width += width * 2;
-    height += height * 2;
+    double targetHeight = plateImage.height + plateImage.height * 0.8;
+    double targetWidth = plateImage.width + plateImage.width * 0.8;
 
-    plateImage = img.copyResize(plateImage,
-        width: width.toInt(), height: height.toInt());
+    plateImage = img.copyResize(
+      plateImage,
+      width: targetWidth.toInt(),
+      height: targetHeight.toInt(),
+    );
 
-    // img.contrast(plateImage, 500);
-    // plateImage = img.gaussianBlur(plateImage, 2);
-    Uint8List imageBytes = Uint8List.fromList(img.encodePng(plateImage));
+    // img.gaussianBlur(plateImage, 5);
 
-    Directory tempDir = await getTemporaryDirectory();
-
-    File file = await File(pth.join(tempDir.path, 'ocr${tempDir.hashCode}.png'))
-        .create(recursive: true);
-
-    if (!tempDir.existsSync()) {
-      await tempDir.create(recursive: true);
-    }
-
-    if (file.existsSync()) {
-      await file.delete();
-    }
-
-    file = await file.writeAsBytes(imageBytes);
+    File file = await saveFile(plateImage);
 
     InputImage inputImage = InputImage.fromFile(file);
 
     TextRecognizer textRecognizer = TextRecognizer();
 
-    RecognizedText recognizedText =
-        await textRecognizer.processImage(inputImage);
+    RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
 
     await textRecognizer.close();
 
     return Plate(
       plate: recognizedText.text,
-      imageBytes: imageBytes,
+      imageBytes: Uint8List.fromList(img.encodeJpg(plateImage)),
       imageFile: file,
     );
   }
@@ -181,12 +156,4 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     }
     return Uint8List.fromList(img.encodeJpg(image!));
   }
-
-// Uint8List convertGreytoYuv(List<int> grey, int width, int height) {
-//   int size = width * height;
-//   List<int> yuvRaw = List.empty(growable: true);
-//   yuvRaw.addAll(grey);
-//   yuvRaw.addAll(List.filled(size ~/ 2, 0));
-//   return Uint8List.fromList(yuvRaw);
-// }
 }
