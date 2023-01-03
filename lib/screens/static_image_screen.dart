@@ -44,7 +44,12 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
         fit: StackFit.expand,
         alignment: Alignment.topCenter,
         children: <Widget>[
-          Image.memory(imageWithRects()),
+          InteractiveViewer(
+            maxScale: 10,
+            child: Image.memory(
+              imageWithRects(),
+            ),
+          ),
           Positioned(
             bottom: 0,
             child: ElevatedButton(
