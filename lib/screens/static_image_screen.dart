@@ -15,8 +15,10 @@ import 'package:image/image.dart' as img;
 class StaticImageScreen extends StatefulWidget {
   final Uint8List image;
   final List<Detection> detections;
+  final double aspectRatio;
 
-  const StaticImageScreen({required this.image, required this.detections, Key? key}) : super(key: key);
+  const StaticImageScreen({required this.image, required this.detections, required this.aspectRatio, Key? key})
+      : super(key: key);
 
   ///
   ///
@@ -44,10 +46,13 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
         fit: StackFit.expand,
         alignment: Alignment.topCenter,
         children: <Widget>[
-          InteractiveViewer(
-            maxScale: 10,
-            child: Image.memory(
-              imageWithRects(),
+          AspectRatio(
+            aspectRatio: widget.aspectRatio,
+            child: InteractiveViewer(
+              maxScale: 10,
+              child: Image.memory(
+                imageWithRects(),
+              ),
             ),
           ),
           Positioned(
@@ -86,6 +91,12 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
         ),
       );
       await deleteAllCachedImages();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não conseguiu extrair o texto da placa'),
+        ),
+      );
     }
   }
 
@@ -324,7 +335,8 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
                 .replaceAll('I', '1')
                 .replaceAll('B', '8')
                 .replaceAll('G', '6')
-                .replaceAll('|', 'I');
+                .replaceAll('|', 'I')
+                .replaceAll('E', '3');
           }
           newSecondPart.write(letter);
         }

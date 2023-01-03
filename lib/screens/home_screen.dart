@@ -1,5 +1,6 @@
 import 'package:alvaro/controllers/home_controller.dart';
 import 'package:alvaro/widgets/custom_drawer_plate.dart';
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 ///
@@ -52,23 +53,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 if (value) {
                   return Stack(
                     fit: StackFit.expand,
+                    alignment: Alignment.center,
                     children: <Widget>[
                       AspectRatio(
                         aspectRatio: _controller.cameraController.value.aspectRatio,
                         child: _controller.cameraController.buildPreview(),
                       ),
-                      StreamBuilder<List<CustomPaint>?>(
-                        stream: _controller.highlightedCustomPaints.stream,
-                        builder: (
-                          BuildContext context,
-                          AsyncSnapshot<List<CustomPaint>?> snapshot,
-                        ) {
-                          if (snapshot.data == null) {
-                            return Container();
-                          }
-                          return Stack(
-                            fit: StackFit.expand,
-                            children: snapshot.data!,
+                      ValueListenableBuilder<FlashMode>(
+                        valueListenable: _controller.flashMode,
+                        builder: (BuildContext context, FlashMode value, Widget? child) {
+                          return Positioned(
+                            bottom: 15,
+                            child: GestureDetector(
+                              onTap: _controller.toogleFlash,
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  color: Colors.grey,
+                                  shape: BoxShape.circle,
+                                ),
+                                width: 55,
+                                height: 55,
+                                child: Center(
+                                  child: Icon(value == FlashMode.off ? Icons.flash_on : Icons.flash_off),
+                                ),
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -94,8 +103,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   valueListenable: _controller.isStreaming,
                   builder: (BuildContext context, bool isStreaming, Widget? child) {
                     return ElevatedButton(
-                      onPressed: _controller.startMonitoring,
-                      child: Text(isStreaming ? 'Parar' : 'Ativar'),
+                      onPressed: _controller.takePhoto,
+                      child: const Text('Fotografar'),
                     );
                   },
                 ),

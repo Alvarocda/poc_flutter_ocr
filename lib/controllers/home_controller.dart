@@ -33,7 +33,7 @@ class HomeController {
 
   final ValueNotifier<bool> isCameraLoaded = ValueNotifier<bool>(false);
   final ValueNotifier<bool> isStreaming = ValueNotifier<bool>(false);
-
+  final ValueNotifier<FlashMode> flashMode = ValueNotifier<FlashMode>(FlashMode.off);
   final StreamController<List<CustomPaint>?> highlightedCustomPaints = StreamController<List<CustomPaint>?>();
   bool _isProcessing = false;
 
@@ -56,7 +56,7 @@ class HomeController {
     _cameras = await availableCameras();
     cameraController = CameraController(
       cameraDescription ?? _cameras.first,
-      ResolutionPreset.low,
+      ResolutionPreset.high,
       imageFormatGroup: ImageFormatGroup.yuv420,
       enableAudio: false,
     );
@@ -79,6 +79,27 @@ class HomeController {
       isStreaming.value = true;
       await cameraController.startImageStream(_processImage);
     }
+  }
+
+  ///
+  ///
+  ///
+  Future<void> takePhoto() async {
+    XFile photo = await cameraController.takePicture();
+    img.Image? decodedImage = img.decodeImage(await photo.readAsBytes());
+    await _processStaticImage(await photo.readAsBytes(), decodedImage!.height, decodedImage.width);
+  }
+
+  ///
+  ///
+  ///
+  Future<void> toogleFlash() async {
+    if (flashMode.value == FlashMode.off) {
+      flashMode.value = FlashMode.always;
+    } else {
+      flashMode.value = FlashMode.off;
+    }
+    await cameraController.setFlashMode(flashMode.value);
   }
 
   ///
@@ -188,6 +209,7 @@ class HomeController {
           builder: (_) => StaticImageScreen(
             image: encodedImage,
             detections: detections,
+            aspectRatio: cameraController.value.aspectRatio,
           ),
         ),
       );

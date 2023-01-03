@@ -14,6 +14,7 @@ class Detection {
   late double y1;
   late double y2;
   late CustomPaint rect;
+  double? aspectRatio;
 
   ///
   ///
