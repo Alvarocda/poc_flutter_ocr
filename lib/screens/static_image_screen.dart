@@ -95,20 +95,20 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
   Future<img.Image> _prepareImage(Detection detection, int radius) async {
     img.Image plateImage = img.decodeImage(widget.image)!;
 
-    // img.grayscale(plateImage!);
-
     double width = detection.x2 - detection.x1;
     double height = detection.y2 - detection.y1;
 
-    // img.contrast(plateImage, 100 + radius);
-
-    return img.copyCrop(
+    plateImage = img.copyCrop(
       plateImage,
       detection.x1.toInt() - radius,
       detection.y1.toInt() - radius,
       width.toInt() + radius + 10,
       height.toInt() + radius + 10,
     );
+
+    img.gaussianBlur(plateImage, 2);
+
+    return plateImage;
   }
 
   ///
@@ -144,7 +144,7 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
         break;
       }
     }
-    print('Tentativas: $attempts');
+    print('Attempts: $attempts');
 
     await textRecognizer.close();
 
