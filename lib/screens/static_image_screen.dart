@@ -93,15 +93,17 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
   ///
   ///
   Future<img.Image> _prepareImage(Detection detection, int radius) async {
-    img.Image? plateImage = img.decodeImage(widget.image);
+    img.Image plateImage = img.decodeImage(widget.image)!;
 
     // img.grayscale(plateImage!);
 
     double width = detection.x2 - detection.x1;
     double height = detection.y2 - detection.y1;
 
+    // img.contrast(plateImage, 100 + radius);
+
     return img.copyCrop(
-      plateImage!,
+      plateImage,
       detection.x1.toInt() - radius,
       detection.y1.toInt() - radius,
       width.toInt() + radius + 10,
@@ -190,46 +192,35 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
       return match?.group(0);
     } else {
       int elementIndex = 0;
+
       for (TextBlock block in recognizedText.blocks) {
-        for (TextLine line in block.lines) {
-          elementIndex = 0;
-          for (TextElement element in line.elements) {
-            String detectedPlate = normalizePlate(element.text);
-            // dev.debugger(when: detectedPlate == 'XAS');
-            // dev.debugger(when: detectedPlate == '4550');
-
-            /// If the text is not exactly 7 characters long, it will try to concatenate the text of the previous
-            /// element with the current element and check if the junction of the two forms a valid plate.
-            /// As the algorithm is working with TextElements, it ends up splitting into different elements when it
-            /// detects a space in the middle of the plate.
-            if (detectedPlate.length == 7) {
-              if (isValidPlate(detectedPlate)) {
-                return detectedPlate;
-              } else {
-                String formatedPlate = formatPlate(detectedPlate);
-                if (isValidPlate(formatedPlate)) {
-                  return formatedPlate;
-                }
+        // if the detected text is in 2 lines, it has a high change to be a motorbike plate
+        if (block.lines.length == 2) {
+          String possiblePlate = '${block.lines.first.text}${block.lines.last.text}';
+          possiblePlate = normalizePlate(possiblePlate);
+          if (possiblePlate.length == 7) {
+            if (isValidPlate(possiblePlate)) {
+              return possiblePlate;
+            } else {
+              String formatedPlate = formatPlate(possiblePlate);
+              if (isValidPlate(formatedPlate)) {
+                return formatedPlate;
               }
+            }
+          }
+        } else {
+          for (TextLine line in block.lines) {
+            elementIndex = 0;
+            for (TextElement element in line.elements) {
+              String detectedPlate = normalizePlate(element.text);
+              // dev.debugger(when: detectedPlate == 'XAS');
+              // dev.debugger(when: detectedPlate == '4550');
 
-              /// If the text in the current element has less than 7 letters, it will check if the text size is 4 characters
-              /// and if it is composed of 4 numbers, if it is composed of 4 numbers, it will check if the text in the
-              /// previous element is composed of 3 letters, if both conditions are true, the algorithm will understand
-              /// that it can be a plate and will assemble a String with the junction of the two.
-            } else if (detectedPlate.length == 4) {
-              if (elementIndex == 0) {
-                return null;
-              }
-              TextElement lastTextElement = line.elements[elementIndex - 1];
-              if (RegExp('[a-zA-Z]{3}').hasMatch(lastTextElement.text)) {
-                String detectedPlate = '${lastTextElement.text}${element.text}';
-                if (detectedPlate.length != 7) {
-                  elementIndex++;
-                  continue;
-                }
-
-                detectedPlate = normalizePlate(detectedPlate);
-
+              /// If the text is not exactly 7 characters long, it will try to concatenate the text of the previous
+              /// element with the current element and check if the junction of the two forms a valid plate.
+              /// As the algorithm is working with TextElements, it ends up splitting into different elements when it
+              /// detects a space in the middle of the plate.
+              if (detectedPlate.length == 7) {
                 if (isValidPlate(detectedPlate)) {
                   return detectedPlate;
                 } else {
@@ -238,11 +229,39 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
                     return formatedPlate;
                   }
                 }
+
+                /// If the text in the current element has less than 7 letters, it will check if the text size is 4 characters
+                /// and if it is composed of 4 numbers, if it is composed of 4 numbers, it will check if the text in the
+                /// previous element is composed of 3 letters, if both conditions are true, the algorithm will understand
+                /// that it can be a plate and will assemble a String with the junction of the two.
+              } else if (detectedPlate.length == 4) {
+                if (elementIndex == 0) {
+                  elementIndex++;
+                  continue;
+                }
+                TextElement lastTextElement = line.elements[elementIndex - 1];
+                if (RegExp('[a-zA-Z]{3}').hasMatch(lastTextElement.text)) {
+                  String detectedPlate = '${lastTextElement.text}${element.text}';
+                  detectedPlate = normalizePlate(detectedPlate);
+                  if (detectedPlate.length != 7) {
+                    elementIndex++;
+                    continue;
+                  }
+
+                  if (isValidPlate(detectedPlate)) {
+                    return detectedPlate;
+                  } else {
+                    String formatedPlate = formatPlate(detectedPlate);
+                    if (isValidPlate(formatedPlate)) {
+                      return formatedPlate;
+                    }
+                  }
+                }
+              } else {
+                print('Discarded plate: ${element.text}');
               }
-            } else {
-              print('Discarded plate: ${element.text}');
+              elementIndex++;
             }
-            elementIndex++;
           }
         }
       }
