@@ -31,8 +31,6 @@ class PlateScreen extends StatelessWidget {
               Text(plate.plate),
               Text('Bytes'),
               Image.memory(plate.imageBytes),
-              Text('File'),
-              Image.file(plate.imageFile!),
             ],
           ),
         ),

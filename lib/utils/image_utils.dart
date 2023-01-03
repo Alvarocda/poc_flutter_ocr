@@ -27,7 +27,7 @@ double calculateAspectRatio(int srcWidth, int srcHeight, int targetWidth, int ta
 ///
 ///
 Future<File> saveFile(img.Image image) async {
-  Uint8List imageBytes = Uint8List.fromList(img.encodePng(image));
+  Uint8List imageBytes = Uint8List.fromList(img.encodeJpg(image));
 
   Directory tempDir = await getTemporaryDirectory();
 

@@ -87,7 +87,7 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
   ///
   ///
   ///
-  Future<Plate?> _extractPlate(Detection detection) async {
+  Future<img.Image> _prepareImage(Detection detection, int radius) async {
     img.Image? plateImage = img.decodeImage(widget.image);
 
     // img.grayscale(plateImage!);
@@ -95,23 +95,22 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     double width = detection.x2 - detection.x1;
     double height = detection.y2 - detection.y1;
 
-    plateImage = img.copyCrop(
+    return img.copyCrop(
       plateImage!,
-      detection.x1.toInt() - 10,
-      detection.y1.toInt() - 10,
-      width.toInt() + 20,
-      height.toInt() + 20,
+      detection.x1.toInt() - radius,
+      detection.y1.toInt() - radius,
+      width.toInt() + radius + 10,
+      height.toInt() + radius + 10,
     );
+  }
 
-    // plateImage = img.copyResize(
-    //   plateImage,
-    //   width: targetWidth.toInt(),
-    //   height: targetHeight.toInt(),
-    //   interpolation: img.Interpolation.cubic,
-    // );
+  ///
+  ///
+  ///
+  Future<Plate?> _extractPlate(Detection detection) async {
+    int radius = 0;
 
-    // img.gaussianBlur(plateImage, 5);
-
+    img.Image plateImage = await _prepareImage(detection, radius);
     File file = await saveFile(plateImage);
 
     InputImage inputImage = InputImage.fromFile(file);
@@ -121,6 +120,24 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
     RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
 
     String? licensePlate = extractLicensePlate(recognizedText);
+    int attempts = 0;
+    while (licensePlate == null) {
+      radius += 10;
+      img.Image plateImage = await _prepareImage(detection, radius);
+      file = await saveFile(plateImage);
+
+      InputImage inputImage = InputImage.fromFile(file);
+      recognizedText = await textRecognizer.processImage(inputImage);
+      licensePlate = extractLicensePlate(recognizedText);
+      if (licensePlate != null) {
+        break;
+      }
+      attempts++;
+      if (attempts == 7) {
+        break;
+      }
+    }
+    print('Tentativas: $attempts');
 
     await textRecognizer.close();
 
@@ -130,8 +147,7 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
 
     return Plate(
       plate: licensePlate.toUpperCase(),
-      imageBytes: Uint8List.fromList(img.encodeJpg(plateImage)),
-      imageFile: file,
+      imageBytes: await file.readAsBytes(),
     );
   }
 
@@ -226,14 +242,20 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
         }
       }
     }
-    return recognizedText.text;
+    return null;
   }
 
   ///
   ///
   ///
-  String normalizePlate(String plate) =>
-      plate.trim().replaceAll('\n', '').replaceAll(' ', '').replaceAll('-', '').replaceAll('.', '').replaceAll(':', '');
+  String normalizePlate(String plate) => plate
+      .trim()
+      .replaceAll('\n', '')
+      .replaceAll(' ', '')
+      .replaceAll('-', '')
+      .replaceAll('.', '')
+      .replaceAll(':', '')
+      .replaceAll('·', '');
 
   ///
   ///
@@ -255,7 +277,8 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
           .replaceAll('8', 'B')
           .replaceAll('2', 'Z')
           .replaceAll('11', 'H')
-          .replaceAll('5', 'S');
+          .replaceAll('5', 'S')
+          .replaceAll('|', 'I');
     }
     if (!RegExp('[0-9][A-Za-z0-9][0-9]{2}').hasMatch(secondPart)) {
       List<String> secondPartLetters = secondPart.split('');
@@ -265,9 +288,19 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
         if (RegExp('[0-9]').hasMatch(letter)) {
           newSecondPart.write(letter);
         } else {
-          letter = letter.replaceAll('O', '0').replaceAll('T', '1').replaceAll('Z', '2').replaceAll('S', '5');
+          letter = letter
+              .replaceAll('O', '0')
+              .replaceAll('T', '1')
+              .replaceAll('Z', '2')
+              .replaceAll('S', '5')
+              .replaceAll('|', '1');
           if (letterAux != 2) {
-            letter = letter.replaceAll('H', '11').replaceAll('I', '1').replaceAll('B', '8').replaceAll('G', '6');
+            letter = letter
+                .replaceAll('H', '11')
+                .replaceAll('I', '1')
+                .replaceAll('B', '8')
+                .replaceAll('G', '6')
+                .replaceAll('|', 'I');
           }
           newSecondPart.write(letter);
         }

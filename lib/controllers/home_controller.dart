@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:alvaro/models/detection.dart';
 import 'package:alvaro/models/plate.dart';
+import 'package:alvaro/screens/static_image_screen.dart';
 import 'package:alvaro/utils/image_utils.dart';
 import 'package:alvaro/widgets/custom_text_recognize_painter.dart';
 import 'package:camera/camera.dart';
@@ -12,8 +13,6 @@ import 'package:flutter_vision/src/utils/response_handler.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
-
-import '../screens/static_image_screen.dart';
 
 ///
 ///
@@ -106,66 +105,80 @@ class HomeController {
     List<CustomPaint> highlights = <CustomPaint>[];
     List<Detection> detections = <Detection>[];
 
-    img.Image? grayScaleImage = img.decodeImage(bytes);
+    img.Image optmizedImage = img.decodeImage(bytes)!;
 
-    if (grayScaleImage!.width < 1920) {
-      double targetHeight = grayScaleImage.height + grayScaleImage.height * 0.5;
-      double targetWidth = grayScaleImage.width + grayScaleImage.width * 0.5;
+    if (optmizedImage.width <= 1920) {
+      double targetHeight = optmizedImage.height + optmizedImage.height * 0.5;
+      double targetWidth = optmizedImage.width + optmizedImage.width * 0.5;
 
-      grayScaleImage = img.copyResize(
-        grayScaleImage,
+      optmizedImage = img.copyResize(
+        optmizedImage,
         width: targetWidth.toInt(),
         height: targetHeight.toInt(),
         interpolation: img.Interpolation.cubic,
       );
-    } else if (grayScaleImage.width > 1920) {
-      double aspectRatio = calculateAspectRatio(grayScaleImage.width, grayScaleImage.height, 1920, 1080);
-      double newWidth = grayScaleImage.width - grayScaleImage.width * aspectRatio;
-      double newHeight = grayScaleImage.height - grayScaleImage.height * aspectRatio;
-      grayScaleImage = img.copyResize(
-        grayScaleImage,
+    } else if (optmizedImage.width > 2880) {
+      double aspectRatio = calculateAspectRatio(optmizedImage.width, optmizedImage.height, 1920, 1080);
+      double newWidth = optmizedImage.width - optmizedImage.width * aspectRatio;
+      double newHeight = optmizedImage.height - optmizedImage.height * aspectRatio;
+      optmizedImage = img.copyResize(
+        optmizedImage,
         width: newWidth.toInt(),
         height: newHeight.toInt(),
         interpolation: img.Interpolation.cubic,
       );
     }
 
-    grayScaleImage = img.grayscale(grayScaleImage);
+    optmizedImage = img.grayscale(optmizedImage);
 
     // img.gaussianBlur(grayScaleImage, 2);
 
-    Uint8List encodedImage = Uint8List.fromList(img.encodeJpg(grayScaleImage));
+    Uint8List encodedImage = Uint8List.fromList(img.encodeJpg(optmizedImage));
 
-    encodedImage = convertGreytoYuv(encodedImage.toList(), grayScaleImage.width, grayScaleImage.height);
+    encodedImage = convertGreytoYuv(encodedImage.toList(), optmizedImage.width, optmizedImage.height);
 
     ResponseHandler responseHandler = await _vision.yoloOnImage(
       bytesList: encodedImage,
-      imageHeight: grayScaleImage.height,
-      imageWidth: grayScaleImage.width,
-      confThreshold: 0.8,
-      iouThreshold: 0.8,
+      imageHeight: optmizedImage.height,
+      imageWidth: optmizedImage.width,
+      confThreshold: 0.5,
+      iouThreshold: 0.5,
     );
 
     if (responseHandler.type == 'success') {
-      for (Map<String, dynamic> detectedObject in responseHandler.data) {
-        Detection detection = Detection.fromMap(detectedObject);
-
-        Rect rect = Rect.fromPoints(Offset(detection.x1, detection.y1), Offset(detection.x2, detection.y2));
-
-        _highlightDetectedPlate(
-          'detectedPlate',
-          rect,
-          height.toDouble(),
-          width.toDouble(),
-          detection.image,
-          highlights,
-          detection,
+      if (responseHandler.data.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nenhuma placa detectada na imagem'),
+          ),
         );
-        detections.add(detection);
+      } else {
+        for (Map<String, dynamic> detectedObject in responseHandler.data) {
+          Detection detection = Detection.fromMap(detectedObject);
+
+          Rect rect = Rect.fromPoints(Offset(detection.x1, detection.y1), Offset(detection.x2, detection.y2));
+
+          _highlightDetectedPlate(
+            'detectedPlate',
+            rect,
+            height.toDouble(),
+            width.toDouble(),
+            detection.image,
+            highlights,
+            detection,
+          );
+          detections.add(detection);
+        }
       }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Falha ao detectar placas na imagem'),
+        ),
+      );
     }
 
-    _onDetectPlate.add(_detectedPlates);
+    // _onDetectPlate.add(_detectedPlates);
     if (highlights.isNotEmpty) {
       highlightedCustomPaints.add(highlights);
       // await Future<void>.delayed(const Duration(seconds: 1));
