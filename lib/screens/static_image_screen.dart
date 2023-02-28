@@ -15,10 +15,8 @@ import 'package:image/image.dart' as img;
 class StaticImageScreen extends StatefulWidget {
   final Uint8List image;
   final List<Detection> detections;
-  final double aspectRatio;
 
-  const StaticImageScreen({required this.image, required this.detections, required this.aspectRatio, Key? key})
-      : super(key: key);
+  const StaticImageScreen({required this.image, required this.detections, Key? key}) : super(key: key);
 
   ///
   ///
@@ -46,13 +44,10 @@ class _StaticImageScreenState extends State<StaticImageScreen> {
         fit: StackFit.expand,
         alignment: Alignment.topCenter,
         children: <Widget>[
-          AspectRatio(
-            aspectRatio: widget.aspectRatio,
-            child: InteractiveViewer(
-              maxScale: 10,
-              child: Image.memory(
-                imageWithRects(),
-              ),
+          InteractiveViewer(
+            maxScale: 10,
+            child: Image.memory(
+              imageWithRects(),
             ),
           ),
           Positioned(

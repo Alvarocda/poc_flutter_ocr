@@ -1,5 +1,4 @@
 import 'package:alvaro/controllers/home_controller.dart';
-import 'package:alvaro/widgets/custom_drawer_plate.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
@@ -39,9 +38,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detector de placas'),
-      ),
-      endDrawer: CustomDrawerPlate(
-        platesStreamController: _controller.onDetectPlate,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -99,14 +95,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                ValueListenableBuilder<bool>(
-                  valueListenable: _controller.isStreaming,
-                  builder: (BuildContext context, bool isStreaming, Widget? child) {
-                    return ElevatedButton(
-                      onPressed: _controller.takePhoto,
-                      child: const Text('Fotografar'),
-                    );
-                  },
+                ElevatedButton(
+                  onPressed: _controller.takePhoto,
+                  child: const Text('Fotografar'),
                 ),
                 ElevatedButton(
                   onPressed: _controller.getGalleryImage,
